@@ -12,7 +12,7 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-/* TIKTOK API PROXY */
+/* SINGLE VIDEO API */
 app.get("/api", async (req, res) => {
   try {
     const url = req.query.url;
@@ -25,6 +25,35 @@ app.get("/api", async (req, res) => {
     res.json(j);
   } catch (err) {
     res.status(500).json({ error: "API failed" });
+  }
+});
+
+/* 🔥 PROFILE → FIRST 10 VIDEOS */
+app.get("/profile", async (req, res) => {
+  try {
+    const profileUrl = req.query.url;
+    if (!profileUrl)
+      return res.status(400).json({ error: "No profile URL" });
+
+    const r = await fetch(
+      `https://tikwm.com/api/user/posts?url=${encodeURIComponent(
+        profileUrl
+      )}&count=10`
+    );
+    const j = await r.json();
+
+    if (!j.data || !j.data.videos) {
+      return res.status(500).json({ error: "No videos found" });
+    }
+
+    // Return VIDEO PAGE LINKS (not direct mp4)
+    const links = j.data.videos.map(
+      v => `https://www.tiktok.com/@${v.author.unique_id}/video/${v.video_id}`
+    );
+
+    res.json({ links });
+  } catch (err) {
+    res.status(500).json({ error: "Profile fetch failed" });
   }
 });
 
