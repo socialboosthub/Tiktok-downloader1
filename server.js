@@ -1,37 +1,55 @@
 const express = require("express");
 const fetch = require("node-fetch");
 const path = require("path");
+
 const app = express();
-// SERVE STATIC FILES
+
+/* SERVE STATIC FILES */
 app.use(express.static(path.join(__dirname, "public")));
-// Home route (extra safety)
+
+/* HOME */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
+/* TIKTOK API PROXY */
 app.get("/api", async (req, res) => {
-  const url = req.query.url;
-  const r = await fetch(
-    `https://tikwm.com/api/?url=${encodeURIComponent(url)}`
-  );
-  const j = await r.json();
-  res.json(j);
+  try {
+    const url = req.query.url;
+    if (!url) return res.status(400).json({ error: "No URL" });
+
+    const r = await fetch(
+      `https://tikwm.com/api/?url=${encodeURIComponent(url)}`
+    );
+    const j = await r.json();
+    res.json(j);
+  } catch (err) {
+    res.status(500).json({ error: "API failed" });
+  }
 });
 
+/* VIDEO DOWNLOAD */
 app.get("/download", async (req, res) => {
-  const videoUrl = req.query.url;
-  const response = await fetch(videoUrl);
+  try {
+    const videoUrl = req.query.url;
+    if (!videoUrl) return res.sendStatus(400);
 
-  res.setHeader(
-    "Content-Disposition",
-    "attachment; filename=tiktok.mp4"
-  );
-  res.setHeader("Content-Type", "video/mp4");
+    const response = await fetch(videoUrl);
 
-  response.body.pipe(res);
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=tiktok.mp4"
+    );
+    res.setHeader("Content-Type", "video/mp4");
+
+    response.body.pipe(res);
+  } catch (err) {
+    res.sendStatus(500);
+  }
 });
 
+/* START SERVER */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () =>
-  console.log("Server running on port " + PORT)
-);
-
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
