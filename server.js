@@ -36,9 +36,3 @@ app.listen(PORT, () =>
   console.log("Server running on port " + PORT)
 );
 
-const savedLinks = sessionStorage.getItem("multiLinks");
-if (savedLinks) {
-  input.value = savedLinks;
-  btn.textContent = "Clear";
-  sessionStorage.removeItem("multiLinks");
-}
