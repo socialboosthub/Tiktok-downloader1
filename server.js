@@ -6,8 +6,7 @@ const app = express();
 app.use(express.static(path.join(__dirname, "public")));
 // Home route (extra safety)
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 
 app.get("/api", async (req, res) => {
   const url = req.query.url;
