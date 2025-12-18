@@ -2,13 +2,11 @@ const profileInput = document.getElementById("profileInput");
 const startBtn = document.getElementById("startBtn");
 const status = document.getElementById("status");
 
-// fake extractor (replace with extension / bookmarklet logic)
+/*
+  TEMP extractor
+  (later you replace this with real scraping / extension logic)
+*/
 function extractFirstVideoLinks() {
-  // THIS ARRAY will normally come from:
-  // - extension content script
-  // - bookmarklet
-  // - injected script
-
   return [
     "https://www.tiktok.com/@user/video/123",
     "https://www.tiktok.com/@user/video/456",
@@ -33,26 +31,16 @@ startBtn.addEventListener("click", () => {
     return;
   }
 
-  // 🔥 PASS LINKS TO MULTI DOWNLOADER
-  sendToMultiDownloader(videoLinks);
+  status.textContent = `✅ ${videoLinks.length} videos found. Redirecting...`;
+
+  // 🔥 SEND TO MULTI DOWNLOADER
+  redirectToMulti(videoLinks);
 });
 
-function sendToMultiDownloader(links) {
-  // Example: inject into existing input logic
+function redirectToMulti(links) {
   const joined = links.join("\n");
+  const encoded = encodeURIComponent(joined);
 
-  // If multi downloader is on same page:
-  if (window.parent && window.parent.document) {
-    const input = window.parent.document.getElementById("linkInput");
-    if (input) {
-      input.value = joined;
-      input.dispatchEvent(new Event("input"));
-      status.textContent = "✅ Videos loaded into downloader";
-      return;
-    }
-  }
-
-  // Or redirect with POST / session storage
-  sessionStorage.setItem("multiLinks", joined);
-  window.location.href = "multi-download.html";
+  // ✅ YOUR REAL MULTI DOWNLOADER FILE
+  window.location.href = `download.html?links=${encoded}`;
 }
