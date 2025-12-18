@@ -2,45 +2,35 @@ const profileInput = document.getElementById("profileInput");
 const startBtn = document.getElementById("startBtn");
 const status = document.getElementById("status");
 
-/*
-  TEMP extractor
-  (later you replace this with real scraping / extension logic)
-*/
-function extractFirstVideoLinks() {
-  return [
-    "https://www.tiktok.com/@user/video/123",
-    "https://www.tiktok.com/@user/video/456",
-    "https://www.tiktok.com/@user/video/789"
-  ];
-}
-
-startBtn.addEventListener("click", () => {
+startBtn.addEventListener("click", async () => {
   const profileUrl = profileInput.value.trim();
 
   if (!profileUrl.includes("tiktok.com/@")) {
-    alert("❌ Invalid TikTok profile URL");
+    alert("Invalid TikTok profile URL");
     return;
   }
 
-  status.textContent = "Collecting videos...";
+  status.textContent = "Fetching profile videos...";
 
-  const videoLinks = extractFirstVideoLinks();
+  try {
+    const res = await fetch(
+      `/profile?url=${encodeURIComponent(profileUrl)}`
+    );
+    const json = await res.json();
 
-  if (!videoLinks.length) {
-    status.textContent = "❌ No videos found";
-    return;
+    if (!json.links || !json.links.length) {
+      status.textContent = "No videos found";
+      return;
+    }
+
+    status.textContent = `${json.links.length} videos found. Redirecting...`;
+
+    // Redirect to multi downloader
+    window.location.href =
+      "download.html?links=" +
+      encodeURIComponent(json.links.join("\n"));
+
+  } catch (e) {
+    status.textContent = "Failed to load profile";
   }
-
-  status.textContent = `✅ ${videoLinks.length} videos found. Redirecting...`;
-
-  // 🔥 SEND TO MULTI DOWNLOADER
-  redirectToMulti(videoLinks);
 });
-
-function redirectToMulti(links) {
-  const joined = links.join("\n");
-  const encoded = encodeURIComponent(joined);
-
-  // ✅ YOUR REAL MULTI DOWNLOADER FILE
-  window.location.href = `download.html?links=${encoded}`;
-}
