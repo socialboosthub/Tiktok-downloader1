@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
+    <script type="module" src="script.js"></script>
+    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EggMaster Pro</title>
@@ -8,6 +11,18 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
+
+    <div id="login-overlay" class="login-screen">
+    <div class="login-card">
+        <i class="fa-solid fa-egg" style="font-size: 50px; color: #fab1a0;"></i>
+        <h2>Welcome to EggMaster</h2>
+        <p>Sign in to start shopping</p>
+        <button id="google-login-btn" class="google-btn">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Logo.svg" alt="G">
+            Sign in with Google
+        </button>
+    </div>
+    </div>
 
     <header class="top-bar">
         <div class="logo"><i class="fa-solid fa-egg"></i> <span data-i18n="brandName">EggMaster</span></div>
