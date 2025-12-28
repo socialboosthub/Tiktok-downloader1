@@ -1,27 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-    <script type="module" src="script.js"></script>
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EggMaster Pro</title>
+    <script type="module" src="script.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body>
+<body class="not-logged-in">
 
     <div id="login-overlay" class="login-screen">
-    <div class="login-card">
-        <i class="fa-solid fa-egg" style="font-size: 50px; color: #fab1a0;"></i>
-        <h2>Welcome to EggMaster</h2>
-        <p>Sign in to start shopping</p>
-        <button id="google-login-btn" class="google-btn">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Logo.svg" alt="G">
-            Sign in with Google
-        </button>
-    </div>
+        <div class="login-card">
+            <i class="fa-solid fa-egg" style="font-size: 50px; color: #fab1a0;"></i>
+            <h2>Welcome to EggMaster</h2>
+            <p>Sign in to start shopping</p>
+            <button id="google-login-btn" class="google-btn">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Logo.svg" alt="G" style="width:20px;">
+                Sign in with Google
+            </button>
+        </div>
     </div>
 
     <header class="top-bar">
@@ -48,13 +46,13 @@
                 <div class="egg-icon">🥚</div>
                 <h3 data-i18n="prodTray">Tray of 30</h3>
                 <p>Ksh 450</p>
-                <button onclick="placeOrder('Tray of 30', '450')" class="buy-btn" data-i18n="buyNow">Order Now</button>
+                <button onclick="window.placeOrder('Tray of 30', '450')" class="buy-btn" data-i18n="buyNow">Order Now</button>
             </div>
             <div class="product-card">
                 <div class="egg-icon">🍳</div>
                 <h3 data-i18n="prodDozen">Dozen (12)</h3>
                 <p>Ksh 200</p>
-                <button onclick="placeOrder('Dozen (12)', '200')" class="buy-btn" data-i18n="buyNow">Order Now</button>
+                <button onclick="window.placeOrder('Dozen (12)', '200')" class="buy-btn" data-i18n="buyNow">Order Now</button>
             </div>
         </div>
     </section>
@@ -71,7 +69,7 @@
         <div class="settings-group">
             <div class="setting-row">
                 <span data-i18n="setLanguage">Language</span>
-                <select id="langSelect" onchange="changeLanguage(this.value)">
+                <select id="langSelect" onchange="window.changeLanguage(this.value)">
                     <option value="en">English</option>
                     <option value="sw">Kiswahili</option>
                 </select>
@@ -79,7 +77,7 @@
             <div class="setting-row">
                 <span data-i18n="setTheme">Dark Mode</span>
                 <label class="switch">
-                    <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+                    <input type="checkbox" id="themeToggle" onchange="window.toggleTheme()">
                     <span class="slider"></span>
                 </label>
             </div>
@@ -88,12 +86,11 @@
     </section>
 
     <nav class="bottom-nav">
-        <div class="nav-item active" onclick="showPage('home', this)"><i class="fa-solid fa-house"></i><span data-i18n="navHome">Home</span></div>
-        <div class="nav-item" onclick="showPage('shop', this)"><i class="fa-solid fa-store"></i><span data-i18n="navShop">Shop</span></div>
-        <div class="nav-item" onclick="showPage('orders', this)"><i class="fa-solid fa-clipboard-list"></i><span data-i18n="myOrders">Orders</span></div>
-        <div class="nav-item" onclick="showPage('settings', this)"><i class="fa-solid fa-gear"></i><span data-i18n="navSettings">Settings</span></div>
+        <div class="nav-item active" onclick="window.showPage('home', this)"><i class="fa-solid fa-house"></i><span data-i18n="navHome">Home</span></div>
+        <div class="nav-item" onclick="window.showPage('shop', this)"><i class="fa-solid fa-store"></i><span data-i18n="navShop">Shop</span></div>
+        <div class="nav-item" onclick="window.showPage('orders', this)"><i class="fa-solid fa-clipboard-list"></i><span data-i18n="myOrders">Orders</span></div>
+        <div class="nav-item" onclick="window.showPage('settings', this)"><i class="fa-solid fa-gear"></i><span data-i18n="navSettings">Settings</span></div>
     </nav>
 
-    <script src="script.js"></script>
 </body>
 </html>
