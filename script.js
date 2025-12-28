@@ -1,8 +1,7 @@
-// 1. Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// 2. Your Firebase Configuration
+// 1. Your Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
     authDomain: "eggshop-702f6.firebaseapp.com",
@@ -13,13 +12,12 @@ const firebaseConfig = {
     measurementId: "G-HVJKWCER6S"
 };
 
-// 3. Initialize Firebase & Variables
+// 2. Init Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 let currentUser = null;
 
-// Translation Dictionary
 const translations = {
     en: {
         brandName: "EggMaster", navHome: "Home", navShop: "Shop", navSettings: "Settings",
@@ -37,17 +35,17 @@ const translations = {
     }
 };
 
-// --- AUTHENTICATION LOGIC ---
-
-// Listen for Login/Logout
+// --- AUTH LOGIC ---
 onAuthStateChanged(auth, (user) => {
     const loginOverlay = document.getElementById('login-overlay');
     if (user) {
         currentUser = user;
         loginOverlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
-        document.querySelector('.user-profile').innerHTML = `<img src="${user.photoURL}" style="width:35px; border-radius:50%; border: 2px solid var(--accent)">`;
-        loadAppData();
+        const profileDiv = document.querySelector('.user-profile');
+        if(profileDiv) profileDiv.innerHTML = `<img src="${user.photoURL}" style="width:35px; border-radius:50%; border: 2px solid #fab1a0">`;
+        loadUserSettings();
+        updateOrderCount();
     } else {
         currentUser = null;
         loginOverlay.style.display = 'flex';
@@ -55,17 +53,18 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// Sign In Function
+// --- ATTACHING TO WINDOW (THIS FIXES THE "NOT FUNCTIONING" ISSUE) ---
+
 window.loginWithGoogle = () => {
-    signInWithPopup(auth, provider).catch(err => alert("Error: " + err.message));
+    signInWithPopup(auth, provider).catch(err => alert("Login Error: " + err.message));
 };
 
-// Sign Out Function
 window.logoutUser = () => {
-    signOut(auth).then(() => location.reload());
+    signOut(auth).then(() => {
+        localStorage.removeItem('theme'); // Optional: reset on logout
+        location.reload();
+    });
 };
-
-// --- APP FUNCTIONALITIES ---
 
 window.showPage = (pageId, element) => {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -79,8 +78,9 @@ window.showPage = (pageId, element) => {
 window.placeOrder = (name, price) => {
     if(!currentUser) return alert("Please login first");
     
-    // Get existing orders from LocalStorage (tied to user email)
-    let allOrders = JSON.parse(localStorage.getItem(`orders_${currentUser.email}`)) || [];
+    // User-specific storage key
+    const userKey = `orders_${currentUser.email}`;
+    let userOrders = JSON.parse(localStorage.getItem(userKey)) || [];
     
     const newOrder = {
         id: '#' + Math.floor(1000 + Math.random() * 9000),
@@ -90,42 +90,11 @@ window.placeOrder = (name, price) => {
         date: new Date().toLocaleDateString()
     };
 
-    allOrders.push(newOrder);
-    localStorage.setItem(`orders_${currentUser.email}`, JSON.stringify(allOrders));
+    userOrders.push(newOrder);
+    localStorage.setItem(userKey, JSON.stringify(userOrders));
     updateOrderCount();
-    alert("Order Successful! Check 'Orders' tab.");
+    alert("Order Placed!");
 };
-
-function renderOrders() {
-    const list = document.getElementById('ordersList');
-    const userOrders = JSON.parse(localStorage.getItem(`orders_${currentUser.email}`)) || [];
-    
-    if (userOrders.length === 0) {
-        list.innerHTML = `<p class="empty-msg" data-i18n="noOrders">No orders yet.</p>`;
-        return;
-    }
-    
-    list.innerHTML = userOrders.map(o => `
-        <div class="order-item">
-            <div>
-                <strong>${o.item}</strong><br>
-                <small>${o.date} | ${o.id}</small>
-            </div>
-            <div style="text-align:right">
-                <p>Ksh ${o.price}</p>
-                <span class="status-pill">${o.status}</span>
-            </div>
-        </div>
-    `).reverse().join(''); // Show newest first
-}
-
-function updateOrderCount() {
-    const userOrders = JSON.parse(localStorage.getItem(`orders_${currentUser.email}`)) || [];
-    const countEl = document.getElementById('orderCount');
-    if(countEl) countEl.innerText = userOrders.length;
-}
-
-// --- SETTINGS ---
 
 window.changeLanguage = (lang) => {
     localStorage.setItem('lang', lang);
@@ -141,21 +110,4 @@ window.toggleTheme = () => {
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
 };
 
-// Initialize Settings on Load
-function loadAppData() {
-    updateOrderCount();
-    const savedLang = localStorage.getItem('lang') || 'en';
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    
-    if(savedTheme === 'dark') {
-        document.getElementById('themeToggle').checked = true;
-        document.documentElement.setAttribute('data-theme', 'dark');
-    }
-    
-    window.changeLanguage(savedLang);
-    document.getElementById('langSelect').value = savedLang;
-}
-
-// Hook up buttons to the window object so HTML can see them
-document.getElementById('google-login-btn').onclick = window.loginWithGoogle;
-document.querySelector('.logout-btn').onclick = window.logoutUser;
+// --- HELPER FUNCTIONS ---
