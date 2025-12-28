@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EggStore - Fresh Eggs</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">
+            <i class="fa-solid fa-egg"></i> <span data-i18n="brandName">EggMaster</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="#" onclick="showPage('home')" data-i18n="navHome">Home</a></li>
+            <li><a href="#" onclick="showPage('shop')" data-i18n="navShop">Shop</a></li>
+            <li><a href="#" onclick="showPage('settings')" data-i18n="navSettings">Settings</a></li>
+        </ul>
+    </nav>
+
+    <section id="home" class="page active">
+        <div class="hero">
+            <h1 data-i18n="heroTitle">Fresh Eggs, Delivered Daily</h1>
+            <p data-i18n="heroSubtitle">From our farm to your frying pan.</p>
+            <button onclick="showPage('shop')" class="cta-btn" data-i18n="shopNow">Shop Now</button>
+        </div>
+        
+        <div class="features">
+            <div class="feature-card">
+                <i class="fa-solid fa-truck"></i>
+                <h3 data-i18n="featDelivery">Fast Delivery</h3>
+            </div>
+            <div class="feature-card">
+                <i class="fa-solid fa-leaf"></i>
+                <h3 data-i18n="featOrganic">100% Organic</h3>
+            </div>
+        </div>
+    </section>
+
+    <section id="shop" class="page">
+        <h2 class="section-title" data-i18n="shopTitle">Our Products</h2>
+        <div class="product-grid">
+            <div class="product-card">
+                <div class="product-img" style="background-color: #f4e1d2;">🥚</div>
+                <h3 data-i18n="prodTray">Tray of 30</h3>
+                <p class="price">Ksh 450</p>
+                <button class="add-cart" data-i18n="addToCart">Add to Cart</button>
+            </div>
+            <div class="product-card">
+                <div class="product-img" style="background-color: #e6c2a0;">🥚</div>
+                <h3 data-i18n="prodDozen">Dozen (12)</h3>
+                <p class="price">Ksh 200</p>
+                <button class="add-cart" data-i18n="addToCart">Add to Cart</button>
+            </div>
+            <div class="product-card">
+                <div class="product-img" style="background-color: #d9a880;">🥚</div>
+                <h3 data-i18n="prodKienyeji">Kienyeji (Tray)</h3>
+                <p class="price">Ksh 650</p>
+                <button class="add-cart" data-i18n="addToCart">Add to Cart</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="settings" class="page">
+        <h2 class="section-title" data-i18n="settingsTitle">Settings</h2>
+        
+        <div class="settings-container">
+            <div class="setting-item">
+                <label data-i18n="setLanguage">Language</label>
+                <select id="languageSelect" onchange="changeLanguage(this.value)">
+                    <option value="en">English</option>
+                    <option value="sw">Kiswahili</option>
+                </select>
+            </div>
+
+            <hr>
+
+            <div class="setting-item">
+                <label data-i18n="setTheme">Appearance</label>
+                <div class="toggle-container">
+                    <span data-i18n="themeLight">Light</span>
+                    <label class="switch">
+                        <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+                        <span class="slider round"></span>
+                    </label>
+                    <span data-i18n="themeDark">Dark</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="script.js"></script>
+</body>
+</html>
