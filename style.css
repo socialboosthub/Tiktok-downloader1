@@ -1,3 +1,29 @@
+/* Login Screen */
+.login-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: var(--bg); z-index: 1000;
+    display: flex; justify-content: center; align-items: center;
+}
+.login-card {
+    background: var(--card); padding: 40px; border-radius: 25px;
+    text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    width: 80%; max-width: 400px;
+}
+.google-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 12px; margin-top: 20px;
+    border: 1px solid #ddd; border-radius: 10px; background: white;
+    cursor: pointer; font-weight: bold; color: #555;
+}
+.google-btn img { width: 20px; }
+
+/* Hide the main app content until login */
+body.not-logged-in .top-bar, 
+body.not-logged-in .bottom-nav, 
+body.not-logged-in .page {
+    display: none;
+}
+
 :root {
     --bg: #f8f9fa;
     --card: #ffffff;
