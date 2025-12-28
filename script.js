@@ -76,11 +76,17 @@ window.showPage = (pageId, element) => {
     if(pageId === 'orders') renderOrders();
 };
 
+// --- UPDATED ORDER LOGIC ---
+
 window.placeOrder = (name, price) => {
     if(!currentUser) return alert("Please login first");
     
-    // Get existing orders from LocalStorage (tied to user email)
-    let allOrders = JSON.parse(localStorage.getItem(`orders_${currentUser.email}`)) || [];
+    // 1. Create a unique key using the user's email
+    // Example: "orders_john@gmail.com"
+    const userKey = `orders_${currentUser.email}`;
+    
+    // 2. Get ONLY this user's orders
+    let userOrders = JSON.parse(localStorage.getItem(userKey)) || [];
     
     const newOrder = {
         id: '#' + Math.floor(1000 + Math.random() * 9000),
@@ -90,15 +96,21 @@ window.placeOrder = (name, price) => {
         date: new Date().toLocaleDateString()
     };
 
-    allOrders.push(newOrder);
-    localStorage.setItem(`orders_${currentUser.email}`, JSON.stringify(allOrders));
+    userOrders.push(newOrder);
+    
+    // 3. Save back using the unique key
+    localStorage.setItem(userKey, JSON.stringify(userOrders));
+    
     updateOrderCount();
-    alert("Order Successful! Check 'Orders' tab.");
+    alert("Order Successful!");
 };
 
 function renderOrders() {
     const list = document.getElementById('ordersList');
-    const userOrders = JSON.parse(localStorage.getItem(`orders_${currentUser.email}`)) || [];
+    
+    // 4. Ensure we only fetch data for the logged-in email
+    const userKey = `orders_${currentUser.email}`;
+    const userOrders = JSON.parse(localStorage.getItem(userKey)) || [];
     
     if (userOrders.length === 0) {
         list.innerHTML = `<p class="empty-msg" data-i18n="noOrders">No orders yet.</p>`;
@@ -116,46 +128,13 @@ function renderOrders() {
                 <span class="status-pill">${o.status}</span>
             </div>
         </div>
-    `).reverse().join(''); // Show newest first
+    `).reverse().join('');
 }
 
 function updateOrderCount() {
-    const userOrders = JSON.parse(localStorage.getItem(`orders_${currentUser.email}`)) || [];
+    if (!currentUser) return;
+    const userKey = `orders_${currentUser.email}`;
+    const userOrders = JSON.parse(localStorage.getItem(userKey)) || [];
     const countEl = document.getElementById('orderCount');
     if(countEl) countEl.innerText = userOrders.length;
 }
-
-// --- SETTINGS ---
-
-window.changeLanguage = (lang) => {
-    localStorage.setItem('lang', lang);
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        el.innerText = translations[lang][key] || key;
-    });
-};
-
-window.toggleTheme = () => {
-    const isDark = document.getElementById('themeToggle').checked;
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-};
-
-// Initialize Settings on Load
-function loadAppData() {
-    updateOrderCount();
-    const savedLang = localStorage.getItem('lang') || 'en';
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    
-    if(savedTheme === 'dark') {
-        document.getElementById('themeToggle').checked = true;
-        document.documentElement.setAttribute('data-theme', 'dark');
-    }
-    
-    window.changeLanguage(savedLang);
-    document.getElementById('langSelect').value = savedLang;
-}
-
-// Hook up buttons to the window object so HTML can see them
-document.getElementById('google-login-btn').onclick = window.loginWithGoogle;
-document.querySelector('.logout-btn').onclick = window.logoutUser;
