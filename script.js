@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
@@ -23,18 +23,50 @@ const translations = {
 };
 
 // --- AUTH & INITIAL LOAD ---
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
     const loginOverlay = document.getElementById('login-overlay');
     if (user) {
         loginOverlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
-        loadUserSettings();
+        // Fetch preferences from cloud before updating UI
+        await loadUserSettings();
         updateOrderCount();
     } else {
         loginOverlay.style.display = 'flex';
         document.body.classList.add('not-logged-in');
+        // Reset UI to defaults on logout
+        resetUIToDefaults();
     }
 });
+
+// --- CLOUD USER PREFERENCES ---
+async function loadUserSettings() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        
+        // Use cloud settings if they exist, otherwise use defaults
+        const settings = userDoc.exists() ? userDoc.data() : { lang: 'en', theme: 'light' };
+        
+        // Apply Language
+        window.changeLanguage(settings.lang, false); // false = don't save back to cloud
+        if(document.getElementById('langSelect')) document.getElementById('langSelect').value = settings.lang;
+
+        // Apply Theme
+        document.documentElement.setAttribute('data-theme', settings.theme);
+        if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = (settings.theme === 'dark');
+
+    } catch (e) {
+        console.error("Error loading settings:", e);
+    }
+}
+
+function resetUIToDefaults() {
+    document.documentElement.setAttribute('data-theme', 'light');
+    window.changeLanguage('en', false);
+}
 
 // --- CLOUD ORDERS ---
 window.placeOrder = async (name, price) => {
@@ -61,7 +93,6 @@ async function renderOrders() {
     list.innerHTML = "<p style='text-align:center;'>Fetching...</p>";
 
     try {
-        // Querying Cloud Database
         const q = query(collection(db, "orders"), where("userId", "==", user.uid));
         const querySnapshot = await getDocs(q);
         
@@ -74,9 +105,9 @@ async function renderOrders() {
         querySnapshot.forEach((doc) => {
             const o = doc.data();
             html += `
-                <div class="order-item" style="background:var(--card); margin:10px; padding:15px; border-radius:12px; display:flex; justify-content:space-between; border-left:4px solid #fab1a0;">
+                <div class="order-item">
                     <div><b>${o.item}</b><br><small>${o.createdAt.toDate().toLocaleDateString()}</small></div>
-                    <div style="text-align:right">Ksh ${o.price}<br><span style="color:#e17055; font-size:12px; font-weight:bold;">${o.status}</span></div>
+                    <div style="text-align:right">Ksh ${o.price}<br><span class="status-pill">${o.status}</span></div>
                 </div>`;
         });
         list.innerHTML = html;
@@ -92,31 +123,33 @@ async function updateOrderCount() {
 }
 
 // --- APP FEATURES (LANG & THEME) ---
-window.changeLanguage = (lang) => {
-    localStorage.setItem('app_lang', lang);
+window.changeLanguage = async (lang, saveToCloud = true) => {
+    // Update UI
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         el.innerText = translations[lang][key] || key;
     });
+
+    // Save to Cloud if triggered by user change
+    const user = auth.currentUser;
+    if (saveToCloud && user) {
+        await setDoc(doc(db, "users", user.uid), { lang: lang }, { merge: true });
+    }
 };
 
-window.toggleTheme = () => {
+window.toggleTheme = async () => {
     const isDark = document.getElementById('themeToggle').checked;
     const theme = isDark ? 'dark' : 'light';
+    
+    // Update UI
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('app_theme', theme);
-};
 
-function loadUserSettings() {
-    const theme = localStorage.getItem('app_theme') || 'light';
-    const lang = localStorage.getItem('app_lang') || 'en';
-    
-    document.documentElement.setAttribute('data-theme', theme);
-    if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = (theme === 'dark');
-    
-    window.changeLanguage(lang);
-    if(document.getElementById('langSelect')) document.getElementById('langSelect').value = lang;
-}
+    // Save to Cloud
+    const user = auth.currentUser;
+    if (user) {
+        await setDoc(doc(db, "users", user.uid), { theme: theme }, { merge: true });
+    }
+};
 
 // --- NAVIGATION & AUTH ---
 window.showPage = (pageId, element) => {
@@ -128,6 +161,9 @@ window.showPage = (pageId, element) => {
 };
 
 window.loginWithGoogle = () => signInWithPopup(auth, provider);
-window.logoutUser = () => signOut(auth).then(() => location.reload());
+window.logoutUser = () => signOut(auth).then(() => {
+    localStorage.clear(); // Clear local storage just in case
+    location.reload();
+});
 
 document.getElementById('google-login-btn').onclick = window.loginWithGoogle;
