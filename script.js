@@ -1,6 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-// These are the tools to talk to your new Cloud Database
 import { getFirestore, collection, addDoc, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -15,15 +14,21 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app); // This connects to the database in your screenshot
+const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// --- AUTH LOGIC ---
+const translations = {
+    en: { brandName: "EggMaster", navHome: "Home", navShop: "Shop", navSettings: "Settings", myOrders: "My Orders", noOrders: "No orders yet.", setLanguage: "Language", setTheme: "Dark Mode", logout: "Logout", buyNow: "Order Now", statOrders: "Orders" },
+    sw: { brandName: "Bwana Mayai", navHome: "Mwanzo", navShop: "Duka", navSettings: "Mipangilio", myOrders: "Oda Zangu", noOrders: "Huna oda bado.", setLanguage: "Lugha", setTheme: "Giza", logout: "Ondoka", buyNow: "Agiza Sasa", statOrders: "Oda" }
+};
+
+// --- AUTH & INITIAL LOAD ---
 onAuthStateChanged(auth, (user) => {
     const loginOverlay = document.getElementById('login-overlay');
     if (user) {
         loginOverlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
+        loadUserSettings();
         updateOrderCount();
     } else {
         loginOverlay.style.display = 'flex';
@@ -31,27 +36,21 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// --- CLOUD DATABASE FUNCTIONS ---
-
+// --- CLOUD ORDERS ---
 window.placeOrder = async (name, price) => {
     const user = auth.currentUser;
-    if(!user) return alert("Please login first!");
-
+    if(!user) return;
     try {
-        // This saves the order to your Firestore 'orders' collection
         await addDoc(collection(db, "orders"), {
-            userId: user.uid,        // Ties the order to THIS specific account
+            userId: user.uid,
             item: name,
             price: price,
             status: 'Pending',
-            createdAt: new Date()    
+            createdAt: new Date()
         });
-        
-        alert("Order placed in the cloud! 🥚");
+        alert("Ordered! 🥚");
         updateOrderCount();
-    } catch (e) {
-        alert("Error: " + e.message);
-    }
+    } catch (e) { alert("Error: " + e.message); }
 };
 
 async function renderOrders() {
@@ -59,33 +58,29 @@ async function renderOrders() {
     const list = document.getElementById('ordersList');
     if(!user) return;
 
-    list.innerHTML = "<p style='text-align:center;'>Fetching orders...</p>";
+    list.innerHTML = "<p style='text-align:center;'>Fetching...</p>";
 
-    // Get ONLY orders where userId matches the logged-in user
-    const q = query(
-        collection(db, "orders"), 
-        where("userId", "==", user.uid),
-        orderBy("createdAt", "desc")
-    );
+    try {
+        // Querying Cloud Database
+        const q = query(collection(db, "orders"), where("userId", "==", user.uid));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+            list.innerHTML = `<p style="text-align:center; padding:20px;" data-i18n="noOrders">No orders yet.</p>`;
+            return;
+        }
 
-    const querySnapshot = await getDocs(q);
-    
-    if (querySnapshot.empty) {
-        list.innerHTML = `<p style="text-align:center; padding:20px;">No orders found for this account.</p>`;
-        return;
-    }
-
-    let html = "";
-    querySnapshot.forEach((doc) => {
-        const o = doc.data();
-        html += `
-            <div class="order-item" style="background:var(--card); margin:10px; padding:15px; border-radius:12px; display:flex; justify-content:space-between; border-left:4px solid #fab1a0; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                <div><b>${o.item}</b><br><small>${o.createdAt.toDate().toLocaleDateString()}</small></div>
-                <div style="text-align:right">Ksh ${o.price}<br><span style="color:#e17055; font-size:12px; font-weight:bold;">${o.status}</span></div>
-            </div>
-        `;
-    });
-    list.innerHTML = html;
+        let html = "";
+        querySnapshot.forEach((doc) => {
+            const o = doc.data();
+            html += `
+                <div class="order-item" style="background:var(--card); margin:10px; padding:15px; border-radius:12px; display:flex; justify-content:space-between; border-left:4px solid #fab1a0;">
+                    <div><b>${o.item}</b><br><small>${o.createdAt.toDate().toLocaleDateString()}</small></div>
+                    <div style="text-align:right">Ksh ${o.price}<br><span style="color:#e17055; font-size:12px; font-weight:bold;">${o.status}</span></div>
+                </div>`;
+        });
+        list.innerHTML = html;
+    } catch (e) { list.innerHTML = "Error loading orders."; console.error(e); }
 }
 
 async function updateOrderCount() {
@@ -96,19 +91,43 @@ async function updateOrderCount() {
     document.getElementById('orderCount').innerText = querySnapshot.size;
 }
 
-// --- NAVIGATION ---
+// --- APP FEATURES (LANG & THEME) ---
+window.changeLanguage = (lang) => {
+    localStorage.setItem('app_lang', lang);
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.innerText = translations[lang][key] || key;
+    });
+};
+
+window.toggleTheme = () => {
+    const isDark = document.getElementById('themeToggle').checked;
+    const theme = isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('app_theme', theme);
+};
+
+function loadUserSettings() {
+    const theme = localStorage.getItem('app_theme') || 'light';
+    const lang = localStorage.getItem('app_lang') || 'en';
+    
+    document.documentElement.setAttribute('data-theme', theme);
+    if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = (theme === 'dark');
+    
+    window.changeLanguage(lang);
+    if(document.getElementById('langSelect')) document.getElementById('langSelect').value = lang;
+}
+
+// --- NAVIGATION & AUTH ---
 window.showPage = (pageId, element) => {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
     document.getElementById(pageId).classList.add('active');
-    element.classList.add('active');
-    
+    if(element) element.classList.add('active');
     if(pageId === 'orders') renderOrders();
 };
 
-// --- LOGIN/LOGOUT ---
 window.loginWithGoogle = () => signInWithPopup(auth, provider);
 window.logoutUser = () => signOut(auth).then(() => location.reload());
 
-// Apply Login Button
 document.getElementById('google-login-btn').onclick = window.loginWithGoogle;
