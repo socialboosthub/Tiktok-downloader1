@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-// Add Firestore imports
+// These are the tools to talk to your new Cloud Database
 import { getFirestore, collection, addDoc, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -13,59 +13,55 @@ const firebaseConfig = {
     measurementId: "G-HVJKWCER6S"
 };
 
-// Initialize
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app); // Cloud Database
+const db = getFirestore(app); // This connects to the database in your screenshot
 const provider = new GoogleAuthProvider();
 
-// --- AUTH STATE ---
+// --- AUTH LOGIC ---
 onAuthStateChanged(auth, (user) => {
     const loginOverlay = document.getElementById('login-overlay');
     if (user) {
         loginOverlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
         updateOrderCount();
-        loadUserSettings();
     } else {
         loginOverlay.style.display = 'flex';
         document.body.classList.add('not-logged-in');
     }
 });
 
-// --- CLOUD DATABASE LOGIC ---
+// --- CLOUD DATABASE FUNCTIONS ---
 
-// 1. SAVE ORDER TO CLOUD
 window.placeOrder = async (name, price) => {
     const user = auth.currentUser;
-    if(!user) return alert("Login first!");
+    if(!user) return alert("Please login first!");
 
     try {
+        // This saves the order to your Firestore 'orders' collection
         await addDoc(collection(db, "orders"), {
-            userId: user.uid,        // Linked to the specific user
-            userEmail: user.email,
+            userId: user.uid,        // Ties the order to THIS specific account
             item: name,
             price: price,
-            status: 'Processing',
-            createdAt: new Date()    // Server timestamp
+            status: 'Pending',
+            createdAt: new Date()    
         });
         
-        alert("Order sent to Cloud! 🚀");
+        alert("Order placed in the cloud! 🥚");
         updateOrderCount();
     } catch (e) {
-        console.error("Error adding document: ", e);
+        alert("Error: " + e.message);
     }
 };
 
-// 2. FETCH ORDERS FROM CLOUD
 async function renderOrders() {
     const user = auth.currentUser;
     const list = document.getElementById('ordersList');
     if(!user) return;
 
-    list.innerHTML = "<p style='text-align:center;'>Loading your cloud orders...</p>";
+    list.innerHTML = "<p style='text-align:center;'>Fetching orders...</p>";
 
-    // Query: Get orders WHERE userId is equal to current user UID
+    // Get ONLY orders where userId matches the logged-in user
     const q = query(
         collection(db, "orders"), 
         where("userId", "==", user.uid),
@@ -75,7 +71,7 @@ async function renderOrders() {
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
-        list.innerHTML = `<p style="text-align:center; padding:20px;">No cloud orders found for ${user.email}</p>`;
+        list.innerHTML = `<p style="text-align:center; padding:20px;">No orders found for this account.</p>`;
         return;
     }
 
@@ -83,8 +79,8 @@ async function renderOrders() {
     querySnapshot.forEach((doc) => {
         const o = doc.data();
         html += `
-            <div class="order-item" style="background:var(--card); margin:10px; padding:15px; border-radius:10px; display:flex; justify-content:space-between; border-left:4px solid #fab1a0; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div><b>${o.item}</b><br><small>${o.createdAt.toDate().toLocaleString()}</small></div>
+            <div class="order-item" style="background:var(--card); margin:10px; padding:15px; border-radius:12px; display:flex; justify-content:space-between; border-left:4px solid #fab1a0; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                <div><b>${o.item}</b><br><small>${o.createdAt.toDate().toLocaleDateString()}</small></div>
                 <div style="text-align:right">Ksh ${o.price}<br><span style="color:#e17055; font-size:12px; font-weight:bold;">${o.status}</span></div>
             </div>
         `;
@@ -92,41 +88,27 @@ async function renderOrders() {
     list.innerHTML = html;
 }
 
-// 3. UPDATE COUNT
 async function updateOrderCount() {
     const user = auth.currentUser;
     if(!user) return;
     const q = query(collection(db, "orders"), where("userId", "==", user.uid));
     const querySnapshot = await getDocs(q);
-    const countEl = document.getElementById('orderCount');
-    if(countEl) countEl.innerText = querySnapshot.size;
+    document.getElementById('orderCount').innerText = querySnapshot.size;
 }
 
-// --- APP NAVIGATION ---
+// --- NAVIGATION ---
 window.showPage = (pageId, element) => {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    
     document.getElementById(pageId).classList.add('active');
-    if(element) element.classList.add('active');
+    element.classList.add('active');
     
     if(pageId === 'orders') renderOrders();
 };
 
-// --- AUTH ACTIONS ---
+// --- LOGIN/LOGOUT ---
 window.loginWithGoogle = () => signInWithPopup(auth, provider);
 window.logoutUser = () => signOut(auth).then(() => location.reload());
 
-window.toggleTheme = () => {
-    const isDark = document.getElementById('themeToggle').checked;
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    localStorage.setItem('app_theme', isDark ? 'dark' : 'light');
-};
-
-function loadUserSettings() {
-    const theme = localStorage.getItem('app_theme') || 'light';
-    if(theme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = true;
-    }
-}
+// Apply Login Button
+document.getElementById('google-login-btn').onclick = window.loginWithGoogle;
