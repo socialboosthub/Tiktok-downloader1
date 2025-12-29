@@ -111,3 +111,45 @@ window.toggleTheme = () => {
 };
 
 // --- HELPER FUNCTIONS ---
+
+function renderOrders() {
+    const list = document.getElementById('ordersList');
+    const userKey = `orders_${currentUser.email}`;
+    const userOrders = JSON.parse(localStorage.getItem(userKey)) || [];
+    
+    if (userOrders.length === 0) {
+        list.innerHTML = `<p class="empty-msg" style="padding:20px; text-align:center;">No orders found for ${currentUser.email}</p>`;
+        return;
+    }
+    
+    list.innerHTML = userOrders.map(o => `
+        <div class="order-item" style="background:var(--card); margin-bottom:10px; padding:15px; border-radius:10px; display:flex; justify-content:space-between;">
+            <div><strong>${o.item}</strong><br><small>${o.date}</small></div>
+            <div style="text-align:right">Ksh ${o.price}<br><span class="status-pill" style="background:#55efc4; font-size:10px; padding:2px 5px; border-radius:5px;">${o.status}</span></div>
+        </div>
+    `).reverse().join('');
+}
+
+function updateOrderCount() {
+    const userKey = `orders_${currentUser.email}`;
+    const userOrders = JSON.parse(localStorage.getItem(userKey)) || [];
+    const countEl = document.getElementById('orderCount');
+    if(countEl) countEl.innerText = userOrders.length;
+}
+
+function loadUserSettings() {
+    const savedLang = localStorage.getItem('lang') || 'en';
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    
+    if(savedTheme === 'dark') {
+        document.getElementById('themeToggle').checked = true;
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
+    window.changeLanguage(savedLang);
+    const langSelect = document.getElementById('langSelect');
+    if(langSelect) langSelect.value = savedLang;
+}
+
+// Attach the Login button listener (Backup for the window approach)
+const googleBtn = document.getElementById('google-login-btn');
+if(googleBtn) googleBtn.addEventListener('click', window.loginWithGoogle);
