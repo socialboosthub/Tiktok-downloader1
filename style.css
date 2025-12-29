@@ -1,73 +1,104 @@
-/* Login Screen */
-.login-screen {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: var(--bg); z-index: 1000;
-    display: flex; justify-content: center; align-items: center;
-}
-.login-card {
-    background: var(--card); padding: 40px; border-radius: 25px;
-    text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    width: 80%; max-width: 400px;
-}
-.google-btn {
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    width: 100%; padding: 12px; margin-top: 20px;
-    border: 1px solid #ddd; border-radius: 10px; background: white;
-    cursor: pointer; font-weight: bold; color: #555;
-}
-.google-btn img { width: 20px; }
-
-/* Hide the main app content until login */
-body.not-logged-in .top-bar, 
-body.not-logged-in .bottom-nav, 
-body.not-logged-in .page {
-    display: none;
-}
-
 :root {
-    --bg: #f8f9fa;
+    --bg: #fdfdfd;
     --card: #ffffff;
     --text: #2d3436;
     --primary: #fab1a0;
     --accent: #e17055;
     --nav: #ffffff;
+    --shadow: 0 10px 20px rgba(0,0,0,0.05);
 }
 
 [data-theme="dark"] {
     --bg: #121212;
     --card: #1e1e1e;
-    --text: #dfe6e9;
-    --primary: #fdcb6e;
+    --text: #f5f6fa;
+    --primary: #e17055;
     --nav: #1e1e1e;
+    --shadow: 0 10px 20px rgba(0,0,0,0.3);
 }
 
-body { margin: 0; background: var(--bg); color: var(--text); font-family: sans-serif; padding-bottom: 80px; }
+body { 
+    margin: 0; 
+    background: var(--bg); 
+    color: var(--text); 
+    font-family: 'Segoe UI', Roboto, sans-serif; 
+    transition: background 0.3s;
+}
 
-/* Header */
-.top-bar { display: flex; justify-content: space-between; padding: 15px 20px; background: var(--nav); border-bottom: 1px solid rgba(0,0,0,0.1); }
+/* Glassmorphism Header */
+.top-bar { 
+    position: sticky; top: 0; z-index: 900;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 20px; background: var(--nav); 
+    backdrop-filter: blur(10px); border-bottom: 1px solid rgba(0,0,0,0.05); 
+}
+
+.logo { font-weight: 800; font-size: 1.2rem; color: var(--accent); }
+
+/* Premium Cards */
+.hero-banner { 
+    background: linear-gradient(135deg, var(--primary), #ffeaa7); 
+    margin: 20px; padding: 25px; border-radius: 25px; 
+    display: flex; justify-content: space-between; align-items: center;
+    box-shadow: var(--shadow);
+}
+.hero-img { font-size: 3rem; }
+
+.quick-stats { display: flex; gap: 15px; padding: 0 20px; }
+.stat-card { 
+    flex: 1; background: var(--card); padding: 15px; 
+    border-radius: 18px; text-align: center; box-shadow: var(--shadow);
+}
+.stat-val { display: block; font-size: 1.4rem; font-weight: bold; color: var(--accent); }
+.stat-label { font-size: 0.8rem; opacity: 0.7; }
+
+/* Product Grid */
+.product-grid { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.product-card { 
+    background: var(--card); padding: 20px; border-radius: 22px; 
+    text-align: center; box-shadow: var(--shadow); transition: transform 0.2s;
+}
+.product-card:active { transform: scale(0.95); }
+.egg-icon { font-size: 3rem; margin-bottom: 10px; }
+.buy-btn { 
+    width: 100%; border: none; padding: 12px; border-radius: 12px;
+    background: var(--accent); color: white; font-weight: 600; cursor: pointer;
+}
 
 /* Bottom Nav */
-.bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--nav); display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
-.nav-item { text-align: center; font-size: 12px; color: #636e72; cursor: pointer; }
-.nav-item i { font-size: 20px; display: block; margin-bottom: 4px; }
-.nav-item.active { color: var(--accent); }
+.bottom-nav { 
+    position: fixed; bottom: 0; width: 100%; height: 70px;
+    background: var(--nav); display: flex; justify-content: space-around; 
+    align-items: center; border-top: 1px solid rgba(0,0,0,0.05); 
+}
+.nav-item { color: #b2bec3; font-size: 0.7rem; transition: 0.3s; }
+.nav-item i { font-size: 1.4rem; display: block; margin-bottom: 4px; }
+.nav-item.active { color: var(--accent); transform: translateY(-5px); }
 
-/* App Features */
-.hero-banner { background: var(--primary); margin: 15px; padding: 30px; border-radius: 20px; color: #2d3436; }
-.product-grid { padding: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-.product-card { background: var(--card); padding: 15px; border-radius: 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-.egg-icon { font-size: 40px; }
-.buy-btn { width: 100%; padding: 8px; border: none; border-radius: 8px; background: var(--accent); color: white; margin-top: 10px; }
+/* Settings Card */
+.user-info-card { text-align: center; padding: 30px 0; }
+.user-info-card img { width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--primary); }
 
-/* Orders Styling */
-.order-item { background: var(--card); margin: 10px 15px; padding: 15px; border-radius: 12px; border-left: 5px solid #55efc4; display: flex; justify-content: space-between; align-items: center; }
-.status-pill { background: #55efc4; color: #00b894; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; }
+.settings-group { background: var(--card); margin: 20px; border-radius: 20px; overflow: hidden; }
+.setting-row { 
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 20px; border-bottom: 1px solid rgba(0,0,0,0.05); 
+}
 
-/* Settings */
-.settings-group { background: var(--card); margin: 15px; border-radius: 12px; }
-.setting-row { display: flex; justify-content: space-between; padding: 15px; border-bottom: 1px solid rgba(0,0,0,0.1); }
-.logout-btn { display: block; width: calc(100% - 30px); margin: 15px; padding: 12px; border: none; background: #ff7675; color: white; border-radius: 8px; }
+/* Animations */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+.pulse { animation: pulse 2s infinite; }
 
-/* UI Logic */
-.page { display: none; }
-.page.active { display: block; }
+.login-screen {
+    background: linear-gradient(135deg, #fdfdfd 0%, #fab1a0 100%);
+    position: fixed; inset: 0; z-index: 9999; display: flex; justify-content: center; align-items: center;
+}
+.login-card { background: white; padding: 40px; border-radius: 35px; width: 85%; max-width: 350px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+
+.page { display: none; padding-bottom: 90px; }
+.page.active { display: block; animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
