@@ -1,171 +1,221 @@
-/* --- Modern Variable Palette --- */
+/* =========================================
+   1. GLOBAL VARIABLES & RESET
+   ========================================= */
 :root {
-    --bg: #fdfbf7;           /* Creamy egg-shell white */
-    --card: #ffffff;
-    --text: #2d3436;
-    --text-light: #636e72;
-    --primary: #FFCE00;      /* Egg yolk yellow */
-    --accent: #e67e22;       /* Burnt orange for CTAs */
-    --success: #27ae60;
-    --nav: #ffffff;
-    --shadow: 0 8px 24px rgba(149, 157, 165, 0.1);
-    --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    /* Brand Colors */
+    --primary: #FFB300;     /* Rich Yolk Gold */
+    --primary-gradient: linear-gradient(135deg, #FFB300 0%, #FF6F00 100%);
+    --bg-gradient: linear-gradient(180deg, #F9FAFB 0%, #F3F4F6 100%);
+    
+    /* UI Colors */
+    --bg: #F9FAFB;
+    --card-bg: #FFFFFF;
+    --text-main: #1F2937;
+    --text-muted: #6B7280;
+    --border: #F3F4F6;
+    
+    /* Shadows & Effects */
+    --glass: rgba(255, 255, 255, 0.95);
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.02);
+    --shadow-md: 0 12px 24px -6px rgba(0,0,0,0.08);
+    --shadow-lg: 0 20px 40px -8px rgba(255, 179, 0, 0.3); /* Glow effect */
+    
+    /* Layout */
+    --radius-lg: 24px;
+    --radius-md: 16px;
+    --nav-height: 80px;
 }
 
 [data-theme="dark"] {
-    --bg: #121212;
-    --card: #1e1e1e;
-    --text: #f5f6fa;
-    --text-light: #a4b0be;
-    --primary: #f1c40f;
-    --nav: #181818;
-    --shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    --bg: #111827;
+    --card-bg: #1F2937;
+    --text-main: #F9FAFB;
+    --text-muted: #9CA3AF;
+    --border: #374151;
+    --glass: rgba(31, 41, 55, 0.9);
+    --bg-gradient: linear-gradient(180deg, #111827 0%, #000000 100%);
 }
 
-/* --- Global Reset --- */
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
 body { 
     margin: 0; 
-    background: var(--bg); 
-    color: var(--text); 
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
-    padding-bottom: 90px;
-    line-height: 1.6;
+    font-family: 'Inter', -apple-system, sans-serif; 
+    background: var(--bg);
+    color: var(--text-main);
+    padding-bottom: 100px; /* Space for floating nav */
+    overflow-x: hidden;
 }
 
-/* --- Professional Login Screen --- */
+/* =========================================
+   2. PRO LOGIN SCREEN (GLASSMORPHISM)
+   ========================================= */
 .login-screen {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-    z-index: 2000;
-    display: flex; justify-content: center; align-items: center;
+    background: var(--primary-gradient);
+    z-index: 9999;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 20px;
 }
+
+/* Animated decorative circles behind login */
+.login-screen::before, .login-screen::after {
+    content: ''; position: absolute; border-radius: 50%;
+    background: rgba(255,255,255,0.1); z-index: -1;
+}
+.login-screen::before { width: 300px; height: 300px; top: -50px; left: -50px; }
+.login-screen::after { width: 200px; height: 200px; bottom: 50px; right: -50px; }
 
 .login-card {
-    background: var(--card); 
-    padding: 48px 32px; 
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 40px 30px; 
     border-radius: 30px;
     text-align: center; 
-    box-shadow: var(--shadow);
-    width: 90%; 
-    max-width: 400px;
-    animation: slideUp 0.5s ease;
+    width: 100%; max-width: 380px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255,255,255,0.4);
+    animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.login-card h1 { margin-bottom: 10px; font-size: 24px; }
-.login-card p { color: var(--text-light); margin-bottom: 30px; font-size: 14px; }
+.login-card h2 { margin: 0 0 10px 0; font-size: 26px; font-weight: 800; color: #333; }
+.login-card p { margin: 0 0 30px 0; color: #666; font-size: 14px; }
 
 .google-btn {
-    display: flex; align-items: center; justify-content: center; gap: 12px;
-    width: 100%; padding: 14px; 
-    border: 1.5px solid #eee; border-radius: 14px; 
-    background: white;
-    cursor: pointer; font-weight: 600; color: #444;
-    transition: var(--transition);
+    display: flex; align-items: center; justify-content: center; gap: 15px;
+    width: 100%; padding: 16px; margin-top: 10px;
+    border: none; border-radius: 16px; 
+    background: #fff;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    font-weight: 700; color: #444; font-size: 16px;
+    cursor: pointer; transition: transform 0.2s;
 }
 
-.google-btn:hover { background: #f8f9fa; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.google-btn:active { transform: scale(0.97); }
 
-/* --- App Layout --- */
+/* Hide App Content Logic */
+body.not-logged-in .top-bar, 
+body.not-logged-in .bottom-nav, 
+body.not-logged-in .page { display: none !important; }
+
+/* =========================================
+   3. APP HEADER & LAYOUT
+   ========================================= */
 .top-bar { 
-    position: sticky; top: 0; z-index: 100;
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 16px 24px; background: var(--nav); 
+    display: flex; justify-content: space-between; align-items: center; 
+    padding: 20px 24px; 
+    background: transparent; /* Seamless header */
+    position: sticky; top: 0; z-index: 50;
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(0,0,0,0.05); 
 }
 
-.top-bar h2 { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; margin: 0; }
+.top-bar h2 { font-size: 24px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
 
-/* --- Dashboard/Home --- */
+/* =========================================
+   4. HOME PAGE (HERO & PRODUCTS)
+   ========================================= */
 .hero-banner { 
-    background: linear-gradient(rgba(255,255,255,0.1), rgba(0,0,0,0.05)), var(--primary); 
-    margin: 20px; padding: 35px 25px; border-radius: 24px; 
-    color: #2d3436;
+    background: var(--primary-gradient); 
+    margin: 10px 20px 30px; padding: 40px 25px; 
+    border-radius: 28px; color: white;
+    box-shadow: var(--shadow-lg);
     position: relative; overflow: hidden;
 }
 
-.hero-banner h3 { font-size: 22px; margin: 0; font-weight: 800; }
-.hero-banner p { margin-top: 8px; opacity: 0.9; font-weight: 500; }
+.hero-banner h3 { font-size: 26px; margin: 0; font-weight: 800; }
+.hero-banner p { opacity: 0.9; margin-top: 8px; font-weight: 500; }
 
-/* --- Product Cards --- */
-.product-grid { padding: 0 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.product-grid { 
+    padding: 0 20px; 
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); 
+    gap: 20px; 
+}
 
 .product-card { 
-    background: var(--card); padding: 20px; border-radius: 20px; 
-    text-align: center; box-shadow: var(--shadow);
-    transition: var(--transition);
-    border: 1px solid rgba(0,0,0,0.02);
+    background: var(--card-bg); padding: 20px; 
+    border-radius: 24px; text-align: center; 
+    box-shadow: var(--shadow-md); border: 1px solid var(--border);
+    transition: transform 0.3s ease;
 }
 
-.product-card:active { transform: scale(0.95); }
+.product-card:active { transform: scale(0.96); }
 
 .egg-icon { 
-    font-size: 48px; display: block; margin-bottom: 12px;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+    font-size: 50px; display: block; margin-bottom: 15px; 
+    filter: drop-shadow(0 8px 8px rgba(0,0,0,0.1));
 }
 
-.product-card h4 { margin: 10px 0 5px; font-size: 16px; }
-.price-tag { color: var(--accent); font-weight: 700; font-size: 18px; }
+.product-card h4 { margin: 5px 0; font-size: 17px; font-weight: 700; }
+.product-card span { display: block; color: var(--primary); font-weight: 800; font-size: 18px; margin-bottom: 15px; }
 
 .buy-btn { 
-    width: 100%; padding: 10px; border: none; border-radius: 12px; 
-    background: var(--text); color: white; 
-    margin-top: 15px; font-weight: 600; cursor: pointer;
-    transition: var(--transition);
+    width: 100%; padding: 12px; border: none; 
+    border-radius: 14px; 
+    background: var(--text-main); color: white; 
+    font-weight: 600; font-size: 14px;
+    cursor: pointer;
 }
 
-.buy-btn:hover { background: var(--accent); }
-
-/* --- Navigation --- */
+/* =========================================
+   5. FLOATING NAVIGATION (MODERN)
+   ========================================= */
 .bottom-nav { 
-    position: fixed; bottom: 0; width: 100%; 
-    background: var(--nav); display: flex; justify-content: space-around; 
-    padding: 12px 0 25px; /* Extra padding for modern iPhone home bars */
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.05); 
-    border-radius: 25px 25px 0 0;
+    position: fixed; bottom: 20px; left: 20px; right: 20px;
+    background: var(--card-bg); 
+    height: 70px;
+    border-radius: 20px;
+    display: flex; justify-content: space-around; align-items: center; 
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1); /* Floating Shadow */
+    z-index: 100;
 }
 
 .nav-item { 
-    text-align: center; font-size: 11px; font-weight: 600;
-    color: var(--text-light); cursor: pointer; transition: var(--transition);
-    flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 10px; font-weight: 600;
+    width: 60px; height: 100%;
+    transition: all 0.3s ease;
 }
 
-.nav-item i { font-size: 22px; margin-bottom: 5px; transition: var(--transition); }
-.nav-item.active { color: var(--accent); }
+.nav-item i { font-size: 24px; margin-bottom: 4px; transition: 0.3s; }
+
+/* Active State with Indicator */
+.nav-item.active { color: var(--primary); }
 .nav-item.active i { transform: translateY(-3px); }
 
-/* --- Orders & UI Logic --- */
+/* =========================================
+   6. ORDERS & SETTINGS
+   ========================================= */
 .order-item { 
-    background: var(--card); margin: 12px 20px; padding: 18px; 
-    border-radius: 16px; box-shadow: var(--shadow);
+    background: var(--card-bg); margin: 15px 20px; padding: 20px; 
+    border-radius: 20px; box-shadow: var(--shadow-sm); border: 1px solid var(--border);
     display: flex; justify-content: space-between; align-items: center; 
 }
-
 .status-pill { 
-    background: rgba(39, 174, 96, 0.1); color: var(--success); 
-    padding: 6px 12px; border-radius: 20px; 
-    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    background: #DCFCE7; color: #166534; 
+    padding: 6px 12px; border-radius: 100px; 
+    font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
 }
 
-.page { display: none; animation: fadeIn 0.4s ease; }
-.page.active { display: block; }
+.logout-btn { 
+    background: #FEE2E2; color: #EF4444; 
+    font-weight: 700; width: calc(100% - 40px); margin: 20px; 
+    padding: 18px; border-radius: 18px; border: none;
+}
 
-/* --- Animations --- */
+/* =========================================
+   7. ANIMATIONS
+   ========================================= */
+.page { display: none; opacity: 0; transition: opacity 0.3s; }
+.page.active { display: block; opacity: 1; animation: fadeIn 0.4s ease-out; }
+
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-}
-
-/* Hide main app when not logged in */
-body.not-logged-in .top-bar, 
-body.not-logged-in .bottom-nav, 
-body.not-logged-in .page {
-    display: none;
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
