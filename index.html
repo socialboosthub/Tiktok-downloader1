@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>EggMaster Pro</title>
     <script type="module" src="script.js"></script>
     <link rel="stylesheet" href="style.css">
@@ -12,85 +12,136 @@
 
     <div id="login-overlay" class="login-screen">
         <div class="login-card">
-            <i class="fa-solid fa-egg" style="font-size: 50px; color: #fab1a0;"></i>
-            <h2>Welcome to EggMaster</h2>
-            <p>Sign in to start shopping</p>
+            <div class="brand-icon">
+                <i class="fa-solid fa-egg pulse"></i>
+            </div>
+            <h2 data-i18n="brandName">EggMaster</h2>
+            <p>Premium Farm-to-Table Experience</p>
             <button id="google-login-btn" class="google-btn">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Logo.svg" alt="G" style="width:20px;">
-                Sign in with Google
+                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Logo.svg" alt="G">
+                Continue with Google
             </button>
         </div>
     </div>
 
     <header class="top-bar">
         <div class="logo"><i class="fa-solid fa-egg"></i> <span data-i18n="brandName">EggMaster</span></div>
-        <div class="user-profile"><i class="fa-solid fa-circle-user"></i></div>
+        <div id="user-pfp" class="user-profile">
+            <img id="user-photo" src="" alt="" style="display:none; width:30px; border-radius:50%;">
+            <i id="user-icon" class="fa-solid fa-circle-user"></i>
+        </div>
     </header>
 
-    <section id="home" class="page active">
-        <div class="hero-banner">
-            <h2 data-i18n="heroTitle">Fresh Eggs</h2>
-            <p data-i18n="heroSubtitle">Directly from the farm</p>
-        </div>
-        <div class="quick-stats">
-            <div class="stat-item"><b id="orderCount">0</b> <span data-i18n="statOrders">Orders</span></div>
-            <div class="stat-item"><b>Gold</b> <span data-i18n="statMember">Member</span></div>
-        </div>
-    </section>
-
-    <section id="shop" class="page">
-        <h2 class="section-title" data-i18n="navShop">Shop</h2>
-        <div class="product-grid">
-            <div class="product-card">
-                <span class="badge">Sale</span>
-                <div class="egg-icon">🥚</div>
-                <h3 data-i18n="prodTray">Tray of 30</h3>
-                <p>Ksh 450</p>
-                <button onclick="window.placeOrder('Tray of 30', '450')" class="buy-btn" data-i18n="buyNow">Order Now</button>
+    <main class="app-container">
+        
+        <section id="home" class="page active">
+            <div class="hero-banner">
+                <div class="hero-text">
+                    <h2 data-i18n="heroTitle">Fresh Eggs</h2>
+                    <p data-i18n="heroSubtitle">Directly from the farm</p>
+                </div>
+                <div class="hero-img">🥚</div>
             </div>
-            <div class="product-card">
-                <div class="egg-icon">🍳</div>
-                <h3 data-i18n="prodDozen">Dozen (12)</h3>
-                <p>Ksh 200</p>
-                <button onclick="window.placeOrder('Dozen (12)', '200')" class="buy-btn" data-i18n="buyNow">Order Now</button>
+            
+            <div class="quick-stats">
+                <div class="stat-card">
+                    <span class="stat-val" id="orderCount">0</span>
+                    <span class="stat-label" data-i18n="statOrders">Orders</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-val">Gold</span>
+                    <span class="stat-label" data-i18n="statMember">Member</span>
+                </div>
             </div>
-        </div>
-    </section>
 
-    <section id="orders" class="page">
-        <h2 class="section-title" data-i18n="myOrders">My Orders</h2>
-        <div id="ordersList" class="orders-list">
-            <p class="empty-msg" data-i18n="noOrders">No orders yet.</p>
-        </div>
-    </section>
-
-    <section id="settings" class="page">
-        <h2 class="section-title" data-i18n="navSettings">Settings</h2>
-        <div class="settings-group">
-            <div class="setting-row">
-                <span data-i18n="setLanguage">Language</span>
-                <select id="langSelect" onchange="window.changeLanguage(this.value)">
-                    <option value="en">English</option>
-                    <option value="sw">Kiswahili</option>
-                </select>
+            <div class="section-header">
+                <h3 data-i18n="navShop">Shop Categories</h3>
             </div>
-            <div class="setting-row">
-                <span data-i18n="setTheme">Dark Mode</span>
-                <label class="switch">
-                    <input type="checkbox" id="themeToggle" onchange="window.toggleTheme()">
-                    <span class="slider"></span>
-                </label>
+            <div class="category-scroll">
+                <div class="cat-pill active">All</div>
+                <div class="cat-pill">Organic</div>
+                <div class="cat-pill">Bulk</div>
             </div>
-        </div>
-        <button class="logout-btn" onclick="window.logoutUser()" data-i18n="logout">Logout</button>
+        </section>
 
-    </section>
+        <section id="shop" class="page">
+            <div class="product-grid">
+                <div class="product-card">
+                    <div class="badge">Hot</div>
+                    <div class="egg-icon">🥚</div>
+                    <h3 data-i18n="prodTray">Tray of 30</h3>
+                    <p class="price">Ksh 450</p>
+                    <button onclick="window.placeOrder('Tray of 30', '450')" class="buy-btn">
+                        <i class="fa-solid fa-cart-plus"></i> <span data-i18n="buyNow">Order Now</span>
+                    </button>
+                </div>
+                <div class="product-card">
+                    <div class="egg-icon">🍳</div>
+                    <h3 data-i18n="prodDozen">Dozen (12)</h3>
+                    <p class="price">Ksh 200</p>
+                    <button onclick="window.placeOrder('Dozen (12)', '200')" class="buy-btn">
+                        <i class="fa-solid fa-cart-plus"></i> <span data-i18n="buyNow">Order Now</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section id="orders" class="page">
+            <div class="section-header">
+                <h2 data-i18n="myOrders">My Orders</h2>
+                <span class="refresh-hint">Auto-updates</span>
+            </div>
+            <div id="ordersList" class="orders-list"></div>
+        </section>
+
+        <section id="settings" class="page">
+            <div class="user-info-card">
+                <img id="settings-pfp" src="" alt="User">
+                <h3 id="settings-name">User Name</h3>
+                <p id="settings-email">user@email.com</p>
+            </div>
+
+            <div class="settings-group">
+                <div class="setting-row">
+                    <div class="set-info">
+                        <i class="fa-solid fa-language"></i>
+                        <span data-i18n="setLanguage">Language</span>
+                    </div>
+                    <select id="langSelect" onchange="window.changeLanguage(this.value)">
+                        <option value="en">English</option>
+                        <option value="sw">Kiswahili</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <div class="set-info">
+                        <i class="fa-solid fa-moon"></i>
+                        <span data-i18n="setTheme">Dark Mode</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="themeToggle" onchange="window.toggleTheme()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div class="set-info">
+                        <i class="fa-solid fa-bell"></i>
+                        <span>Notifications</span>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                </div>
+            </div>
+            
+            <button class="logout-btn" onclick="window.logoutUser()">
+                <i class="fa-solid fa-right-from-bracket"></i> <span data-i18n="logout">Logout</span>
+            </button>
+        </section>
+    </main>
 
     <nav class="bottom-nav">
         <div class="nav-item active" onclick="window.showPage('home', this)"><i class="fa-solid fa-house"></i><span data-i18n="navHome">Home</span></div>
         <div class="nav-item" onclick="window.showPage('shop', this)"><i class="fa-solid fa-store"></i><span data-i18n="navShop">Shop</span></div>
         <div class="nav-item" onclick="window.showPage('orders', this)"><i class="fa-solid fa-clipboard-list"></i><span data-i18n="myOrders">Orders</span></div>
-        <div class="nav-item" onclick="window.showPage('settings', this)"><i class="fa-solid fa-gear"></i><span data-i18n="navSettings">Settings</span></div>
+        <div class="nav-item" onclick="window.showPage('settings', this)"><i class="fa-solid fa-user-gear"></i><span data-i18n="navSettings">Settings</span></div>
     </nav>
 
 </body>
