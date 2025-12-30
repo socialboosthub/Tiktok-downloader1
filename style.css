@@ -2,37 +2,31 @@
    1. VARIABLES & RESET
    ========================================= */
 :root {
-    /* Brand Palette */
-    --primary: #FFB300;     /* Gold */
+    --primary: #FFB300;     
     --primary-dark: #FF8F00;
-    --accent: #FFF8E1;      /* Light Cream */
+    --accent: #FFF8E1;      
     
-    /* Functional Colors */
     --bg: #F8F9FA;
     --card: #FFFFFF;
     --text-main: #1A1D1F;
     --text-light: #6F767E;
     --border: #EFEFEF;
     
-    /* Icon Colors */
     --blue: #E3F2FD; --blue-text: #2196F3;
     --green: #E8F5E9; --green-text: #4CAF50;
     --red: #FFEBEE; --red-text: #F44336;
     --purple: #F3E5F5; --purple-text: #9C27B0;
     
-    /* Spacing & Radius */
     --radius-xl: 32px;
     --radius-lg: 20px;
     --radius-md: 12px;
     
-    /* Effects */
     --shadow-soft: 0 10px 40px -10px rgba(0,0,0,0.08);
     --shadow-card: 0 4px 12px rgba(0,0,0,0.03);
     
     --nav-height: 80px;
 }
 
-/* Dark Mode Overrides */
 [data-theme="dark"] {
     --bg: #111315;
     --card: #1A1D1F;
@@ -50,23 +44,28 @@ body {
     font-family: 'Poppins', sans-serif; 
     background: var(--bg); 
     color: var(--text-main); 
-    padding-bottom: 110px; /* Space for nav */
+    padding-bottom: 110px; 
     transition: background 0.3s ease;
 }
 
 /* =========================================
-   2. NEW LOGIN SCREEN (Dark & Modern)
+   2. LOGIN SCREEN (Centered & Fixes)
    ========================================= */
 .login-screen {
     position: fixed; inset: 0;
     background: #000;
     z-index: 9999;
-    display: flex; flex-direction: column; justify-content: flex-end;
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; /* Vertical Center */
+    align-items: center;     /* Horizontal Center */
+    padding: 20px;
     overflow: hidden;
 }
 
 .login-blobs {
     position: absolute; width: 100%; height: 100%; top: 0; left: 0;
+    z-index: 1; /* Low z-index */
 }
 .blob {
     position: absolute; border-radius: 50%;
@@ -76,14 +75,22 @@ body {
 .blob-2 { width: 250px; height: 250px; background: #FF6D00; bottom: 20%; right: -50px; }
 
 .login-content {
-    position: relative; z-index: 2;
-    background: rgba(255,255,255,0.05);
+    position: relative; z-index: 100; /* High z-index to ensure clickability */
+    background: rgba(255,255,255,0.1); 
     backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(255,255,255,0.1);
-    padding: 50px 30px 40px;
-    border-radius: 40px 40px 0 0;
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 50px 30px;
+    border-radius: 40px; 
     color: white; text-align: center;
-    animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    width: 100%;
+    max-width: 400px; 
+    animation: zoomIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+@keyframes zoomIn {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
 }
 
 .logo-anim {
@@ -107,22 +114,18 @@ body {
     color: #000; display: flex; align-items: center; justify-content: center; gap: 10px;
     cursor: pointer; margin-bottom: 15px;
     box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    position: relative; z-index: 101; /* Ensure button is top-most */
 }
-
-.guest-btn {
-    background: transparent; border: 1px solid rgba(255,255,255,0.2);
-    color: white; width: 100%; padding: 15px; border-radius: 16px; font-weight: 500;
-}
+.google-btn:active { transform: scale(0.98); }
 
 .login-footer { margin-top: 30px; font-size: 12px; color: #666; }
-.login-footer a { color: #888; text-decoration: none; }
 
 body.not-logged-in .top-bar, 
 body.not-logged-in .bottom-nav, 
 body.not-logged-in .page { display: none !important; }
 
 /* =========================================
-   3. HEADER
+   3. REST OF APP
    ========================================= */
 .top-bar {
     padding: 20px 24px;
@@ -135,21 +138,8 @@ body.not-logged-in .page { display: none !important; }
 .user-info h3 { margin: 0; font-size: 20px; color: var(--text-main); }
 
 .header-actions { display: flex; gap: 15px; align-items: center; }
-.icon-btn { 
-    width: 40px; height: 40px; border-radius: 50%; 
-    background: var(--card); border: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: center;
-    color: var(--text-main); position: relative;
-}
-.dot-badge { 
-    position: absolute; top: 10px; right: 10px; 
-    width: 8px; height: 8px; background: #FF4444; border-radius: 50%; 
-}
 .profile-pic img { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--primary); }
 
-/* =========================================
-   4. HOME PAGE
-   ========================================= */
 .hero-card {
     margin: 10px 24px; padding: 25px;
     background: linear-gradient(135deg, #1A1D1F 0%, #2C3035 100%);
@@ -168,9 +158,7 @@ body.not-logged-in .page { display: none !important; }
 }
 .hero-img { font-size: 80px; position: absolute; right: -10px; bottom: -20px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3)); }
 
-.stats-row { 
-    display: flex; gap: 15px; padding: 20px 24px; 
-}
+.stats-row { display: flex; gap: 15px; padding: 20px 24px; }
 .stat-card {
     flex: 1; background: var(--card); padding: 15px; 
     border-radius: var(--radius-lg); display: flex; align-items: center; gap: 15px;
@@ -183,7 +171,6 @@ body.not-logged-in .page { display: none !important; }
 
 .section-header { padding: 0 24px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .section-header h3 { margin: 0; font-size: 18px; }
-.section-header a { font-size: 13px; color: var(--primary-dark); text-decoration: none; font-weight: 600; }
 
 .mini-order {
     margin: 0 24px; background: var(--card); padding: 15px;
@@ -199,24 +186,9 @@ body.not-logged-in .page { display: none !important; }
 .mini-order small { color: var(--text-light); font-size: 11px; }
 .mini-order .price { font-weight: 700; font-size: 14px; color: var(--text-main); }
 
-/* =========================================
-   5. SHOP PAGE
-   ========================================= */
 .page-title { padding: 0 24px; margin: 10px 0 20px; font-size: 24px; }
 
-.category-tabs { 
-    padding: 0 24px 20px; display: flex; gap: 10px; overflow-x: auto; 
-}
-.tab {
-    padding: 8px 20px; border-radius: 30px; border: 1px solid var(--border);
-    background: var(--card); color: var(--text-light); font-size: 13px; font-weight: 600;
-}
-.tab.active { background: var(--text-main); color: white; border-color: var(--text-main); }
-
-.product-grid { 
-    padding: 0 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; 
-}
-
+.product-grid { padding: 0 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
 .product-card {
     background: var(--card); border-radius: var(--radius-lg); padding: 10px;
     box-shadow: var(--shadow-card);
@@ -226,21 +198,13 @@ body.not-logged-in .page { display: none !important; }
     height: 120px; display: flex; align-items: center; justify-content: center;
     position: relative;
 }
-.discount-tag {
-    position: absolute; top: 8px; left: 8px;
-    background: #FF4444; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700;
-}
 .prod-emoji { font-size: 50px; }
-
 .prod-details { padding: 10px 5px; }
 .prod-details h3 { margin: 0; font-size: 15px; font-weight: 600; }
-.prod-details .desc { margin: 4px 0 10px; font-size: 11px; color: var(--text-light); }
-
 .price-row { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; }
-.price-row .currency { font-size: 12px; color: var(--primary-dark); margin-right: 2px; }
+.price-row span { font-size: 12px; color: var(--primary-dark); margin-right: 2px; }
 
 .action-row { display: flex; justify-content: space-between; align-items: center; }
-
 .qty-control {
     display: flex; align-items: center; background: var(--bg);
     border-radius: 8px; padding: 2px;
@@ -250,32 +214,22 @@ body.not-logged-in .page { display: none !important; }
     font-weight: 700; color: var(--text-main);
 }
 .qty-control span { font-size: 12px; font-weight: 600; width: 15px; text-align: center; }
-
 .add-btn {
     width: 32px; height: 32px; background: var(--text-main); color: white;
     border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 
-/* =========================================
-   6. SETTINGS PAGE (Reimagined)
-   ========================================= */
 .settings-section {
     background: var(--card); margin: 0 24px 20px;
     border-radius: var(--radius-lg); padding: 5px 0;
     box-shadow: var(--shadow-card); border: 1px solid var(--border);
 }
-.settings-header {
-    margin: 15px 20px 5px; font-size: 12px; text-transform: uppercase;
-    color: var(--text-light); letter-spacing: 1px;
-}
-
 .setting-item {
     display: flex; align-items: center; padding: 15px 20px;
     border-bottom: 1px solid var(--border);
 }
 .setting-item:last-child { border-bottom: none; }
 .setting-item.clickable:active { background: var(--bg); }
-
 .icon-wrap {
     width: 36px; height: 36px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
@@ -285,19 +239,11 @@ body.not-logged-in .page { display: none !important; }
 .color-blue { background: var(--blue); color: var(--blue-text); }
 .color-green { background: var(--green); color: var(--green-text); }
 .color-orange { background: #FFF3E0; color: #FF9800; }
-.color-red { background: var(--red); color: var(--red-text); }
-.color-purple { background: var(--purple); color: var(--purple-text); }
 .color-teal { background: #E0F2F1; color: #009688; }
-.color-gray { background: #F5F5F5; color: #616161; }
-.color-danger { background: #FFEBEE; color: #D32F2F; }
 
 .setting-item .text { flex: 1; font-size: 14px; font-weight: 500; }
 .arrow { color: #CCC; font-size: 12px; }
-.danger-text { color: #D32F2F; font-weight: 600; }
 
-.version-text { text-align: center; font-size: 11px; color: var(--text-light); opacity: 0.5; margin-bottom: 20px; }
-
-/* Switch Toggle */
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider {
@@ -312,15 +258,11 @@ body.not-logged-in .page { display: none !important; }
 input:checked + .slider { background-color: var(--primary); }
 input:checked + .slider:before { transform: translateX(20px); }
 
-/* Minimal Select */
 .minimal-select {
     border: none; background: transparent; color: var(--text-light);
     font-family: inherit; font-size: 13px; text-align: right;
 }
 
-/* =========================================
-   7. NAVIGATION (Floating Notch)
-   ========================================= */
 .bottom-nav {
     position: fixed; bottom: 0; width: 100%;
     height: var(--nav-height);
@@ -331,29 +273,20 @@ input:checked + .slider:before { transform: translateX(20px); }
     box-shadow: 0 -10px 40px rgba(0,0,0,0.05);
     z-index: 100;
 }
-
 .nav-item {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     width: 60px; height: 60px; border-radius: 50%;
     color: var(--text-light); transition: 0.3s;
 }
-
 .nav-item i { font-size: 22px; transition: 0.3s; }
-
-/* Active State */
-
-/* Important: This hides the pages that are not active */
 .page { 
-    display: none !important; /* The !important forces it to hide */
+    display: none !important; 
     opacity: 0; 
     transition: opacity 0.3s; 
     padding-bottom: 20px; 
 }
-
-/* This shows the page only when it has the 'active' class */
 .page.active { 
     display: block !important; 
     opacity: 1; 
     animation: fadeIn 0.3s ease-out; 
 }
-
