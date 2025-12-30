@@ -74,26 +74,45 @@ window.updateLocation = function() {
 };
 
 // --- 3. REAL-TIME ORDER TRACKING ---
+// --- 3. REAL-TIME ORDER TRACKING ---
 function listenToOrders() {
     const user = auth.currentUser;
     if(!user) return;
 
     const q = query(collection(db, "orders"), where("userId", "==", user.uid));
     
-    // This updates automatically without refreshing!
+    // This watches Firebase for changes and updates the UI instantly
     onSnapshot(q, (snapshot) => {
         const count = snapshot.size;
-        // Update Home Stat Card
-        const orderStat = document.querySelector('.stat-card b');
-        if(orderStat) orderStat.innerText = count;
         
-        // Update Recent Activity Preview
-        const recentPreview = document.querySelector('.mini-order .details small');
-        if(recentPreview && count > 0) {
-            recentPreview.innerText = "Total orders: " + count;
+        // 1. Update the Home Stat Card (The "12" you saw)
+        const orderStat = document.getElementById('homeOrderCount');
+        if(orderStat) {
+            orderStat.innerText = count;
+        }
+        
+        // 2. Update the "Recent Activity" text below the stats
+        const recentActivityText = document.querySelector('.mini-order .details small');
+        if(recentActivityText) {
+            recentActivityText.innerText = count > 0 
+                ? `You have ${count} total orders` 
+                : "No recent activity";
+        }
+
+        // 3. Update the item name in the recent activity preview to show the last order
+        const recentActivityTitle = document.querySelector('.mini-order .details h4');
+        if(recentActivityTitle && !snapshot.empty) {
+            // Get the most recent order from the snapshot
+            const lastOrder = snapshot.docs[snapshot.docs.length - 1].data();
+            recentActivityTitle.innerText = lastOrder.item;
+            
+            // Update the price on the home preview too
+            const recentPrice = document.querySelector('.mini-order .price');
+            if(recentPrice) recentPrice.innerText = `Ksh ${lastOrder.price}`;
         }
     });
 }
+
 
 // --- 4. ORDERING WITH LOCATION ---
 window.placeOrder = async (name, price) => {
