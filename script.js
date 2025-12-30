@@ -19,177 +19,154 @@ const provider = new GoogleAuthProvider();
 
 let userLocation = null;
 
-// --- 1. AUTH & INITIALIZATION ---
-onAuthStateChanged(auth, async (user) => {
-    const loginOverlay = document.getElementById('login-overlay');
-    if (user) {
-        loginOverlay.style.opacity = '0';
-        setTimeout(() => { loginOverlay.style.display = 'none'; document.body.classList.remove('not-logged-in'); }, 500);
-        
-        document.getElementById('usernameDisplay').innerText = user.displayName || "Egg Lover 🍳";
-        const profileImg = document.querySelector('.profile-pic img');
-        if(profileImg && user.photoURL) profileImg.src = user.photoURL;
+const translations = {
+    en: { heroTitle: "Fresh Eggs", navShop: "Shop", navSettings: "Settings", myOrders: "My Orders", setTheme: "Dark Mode", setLanguage: "Language", logout: "Logout", statOrders: "Orders", statMember: "Member", prodTray: "Tray of 30", prodDozen: "Dozen (12)", recentActivity: "Recent Activity" },
+    sw: { heroTitle: "Mayai Safi", navShop: "Duka", navSettings: "Mipangilio", myOrders: "Oda Zangu", setTheme: "Giza", setLanguage: "Lugha", logout: "Ondoka", statOrders: "Oda", statMember: "Mwanachama", prodTray: "Tray ya 30", prodDozen: "Dozen (12)", recentActivity: "Shughuli za Hivi Karibuni" }
+};
 
+// --- AUTH STATE ---
+onAuthStateChanged(auth, async (user) => {
+    const overlay = document.getElementById('login-overlay');
+    if (user) {
+        overlay.style.display = 'none';
+        document.body.classList.remove('not-logged-in');
+        document.getElementById('usernameDisplay').innerText = user.displayName;
+        if(user.photoURL) document.getElementById('userPhoto').src = user.photoURL;
+        
         await loadUserSettings();
-        listenToOrders(); // Real-time tracking for Home stats
+        listenToOrders();
     } else {
-        loginOverlay.style.display = 'flex';
+        overlay.style.display = 'flex';
         document.body.classList.add('not-logged-in');
     }
 });
 
-// --- 2. LOCATION LOGIC ---
-window.updateLocation = function() {
-    if (!navigator.geolocation) {
-        alert("Geolocation is not supported by your browser");
-        return;
-    }
-
-    const statusText = document.getElementById('locationStatus');
-    const coordsText = document.getElementById('currentCoords');
-    
-    statusText.innerText = "Locating...";
-
-    navigator.geolocation.getCurrentPosition(async (position) => {
-        userLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            timestamp: new Date()
-        };
-
-        // UI Update
-        statusText.innerText = "Location Saved";
-        coordsText.innerText = `${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`;
-
-        // Save to Cloud
-        const user = auth.currentUser;
-        if (user) {
-            await setDoc(doc(db, "users", user.uid), { location: userLocation }, { merge: true });
-        }
-        alert("Default delivery location updated! 📍");
-    }, (error) => {
-        statusText.innerText = "Location Access Denied";
-        alert("Please enable location permissions in your settings.");
-    });
-};
-
-// --- 3. REAL-TIME ORDER TRACKING ---
-// --- 3. REAL-TIME ORDER TRACKING ---
-function listenToOrders() {
-    const user = auth.currentUser;
-    if(!user) return;
-
-    const q = query(collection(db, "orders"), where("userId", "==", user.uid));
-    
-    // This watches Firebase for changes and updates the UI instantly
-    onSnapshot(q, (snapshot) => {
-        const count = snapshot.size;
-        
-        // 1. Update the Home Stat Card (The "12" you saw)
-        const orderStat = document.getElementById('homeOrderCount');
-        if(orderStat) {
-            orderStat.innerText = count;
-        }
-        
-        // 2. Update the "Recent Activity" text below the stats
-        const recentActivityText = document.querySelector('.mini-order .details small');
-        if(recentActivityText) {
-            recentActivityText.innerText = count > 0 
-                ? `You have ${count} total orders` 
-                : "No recent activity";
-        }
-
-        // 3. Update the item name in the recent activity preview to show the last order
-        const recentActivityTitle = document.querySelector('.mini-order .details h4');
-        if(recentActivityTitle && !snapshot.empty) {
-            // Get the most recent order from the snapshot
-            const lastOrder = snapshot.docs[snapshot.docs.length - 1].data();
-            recentActivityTitle.innerText = lastOrder.item;
-            
-            // Update the price on the home preview too
-            const recentPrice = document.querySelector('.mini-order .price');
-            if(recentPrice) recentPrice.innerText = `Ksh ${lastOrder.price}`;
-        }
-    });
-}
-
-
-// --- 4. ORDERING WITH LOCATION ---
-window.placeOrder = async (name, price) => {
-    const user = auth.currentUser;
-    if(!user) return;
-    
-    // Ask for location if not set
-    if(!userLocation) {
-        const confirmLoc = confirm("No delivery location set. Set your current location as default now?");
-        if(confirmLoc) {
-            window.updateLocation();
-            return; // Stop and let them set location first
-        }
-    }
-
-    try {
-        await addDoc(collection(db, "orders"), {
-            userId: user.uid,
-            item: name,
-            price: price,
-            status: 'Pending',
-            location: userLocation, // Attach location to the order
-            createdAt: new Date()
-        });
-        alert(`Order for ${name} placed! 🥚`);
-    } catch (e) { alert("Error: " + e.message); }
-};
-
-// --- 5. NAVIGATION & UI ---
-window.showPage = (pageId, navElement) => {
-    document.querySelectorAll('.page').forEach(p => {
-        p.classList.remove('active');
-        p.style.display = 'none';
-    });
-    const target = document.getElementById(pageId);
-    if(target) {
-        target.style.display = 'block';
-        setTimeout(() => target.classList.add('active'), 10);
-    }
-    if(navElement) {
-        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-        navElement.classList.add('active');
-    }
-    if(pageId === 'orders') renderOrders();
-};
-
-// Link "Order Now" Hero button to Shop
-document.querySelector('.hero-text button').onclick = () => {
-    window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
-};
-
-// Load Location from Cloud on Start
+// --- SETTINGS (THEME & LANG) ---
 async function loadUserSettings() {
     const user = auth.currentUser;
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    if(userDoc.exists()) {
+    if (userDoc.exists()) {
         const data = userDoc.data();
-        if(data.location) {
-            userLocation = data.location;
-            const coordsText = document.getElementById('currentCoords');
-            if(coordsText) coordsText.innerText = `${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`;
+        // Apply Theme
+        if (data.theme === 'dark') {
+            document.body.setAttribute('data-theme', 'dark');
+            document.getElementById('themeToggle').checked = true;
         }
-        // Handle Theme/Lang
-        if(data.theme === 'dark') document.body.setAttribute('data-theme', 'dark');
+        // Apply Language
+        if (data.lang) {
+            window.changeLanguage(data.lang, false);
+            document.getElementById('langSelect').value = data.lang;
+        }
+        // Apply Location
+        if (data.location) {
+            userLocation = data.location;
+            document.getElementById('currentCoords').innerText = data.location.address || "GPS Set";
+        }
     }
 }
 
-// --- REST OF UTILS ---
-window.loginWithGoogle = () => signInWithPopup(auth, provider);
-window.logoutUser = () => signOut(auth).then(() => location.reload());
-document.getElementById('google-login-btn').onclick = window.loginWithGoogle;
+window.toggleTheme = async () => {
+    const isDark = document.getElementById('themeToggle').checked;
+    const theme = isDark ? 'dark' : 'light';
+    if (isDark) document.body.setAttribute('data-theme', 'dark');
+    else document.body.removeAttribute('data-theme');
 
-// Handle Quantity Buttons
-document.querySelectorAll('.qty-control').forEach(control => {
-    const btnMinus = control.querySelector('button:first-child');
-    const btnPlus = control.querySelector('button:last-child');
-    const span = control.querySelector('span');
-    btnMinus.onclick = () => { let v = parseInt(span.innerText); if(v > 1) span.innerText = v - 1; };
-    btnPlus.onclick = () => { let v = parseInt(span.innerText); span.innerText = v + 1; };
+    if (auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { theme }, { merge: true });
+};
+
+window.changeLanguage = async (lang, save = true) => {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang][key]) el.innerText = translations[lang][key];
+    });
+    if (save && auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { lang }, { merge: true });
+};
+
+// --- LOCATION ---
+window.updateLocation = function() {
+    const address = prompt("Enter Delivery Address (e.g. Estate, House No) or type 'GPS' to use sensor:");
+    if (!address) return;
+
+    if (address.toLowerCase() === 'gps' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "GPS Coordinates", timestamp: new Date() };
+            saveLoc();
+        }, () => alert("GPS Denied. Please type address manually."));
+    } else {
+        userLocation = { lat: null, lng: null, address: address, timestamp: new Date() };
+        saveLoc();
+    }
+};
+
+async function saveLoc() {
+    document.getElementById('currentCoords').innerText = userLocation.address;
+    await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
+    alert("Location Saved!");
+}
+
+// --- ORDERS ---
+window.placeOrder = async (item, price) => {
+    if (!userLocation) {
+        alert("Set delivery address in settings first!");
+        window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
+        return;
+    }
+    await addDoc(collection(db, "orders"), {
+        userId: auth.currentUser.uid,
+        item, price, status: 'Pending',
+        address: userLocation.address,
+        createdAt: new Date()
+    });
+    alert("Ordered! 🥚");
+};
+
+function listenToOrders() {
+    const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
+    onSnapshot(q, (snap) => {
+        document.getElementById('homeOrderCount').innerText = snap.size;
+        if (!snap.empty) {
+            const last = snap.docs[snap.docs.length - 1].data();
+            document.getElementById('recentItemName').innerText = last.item;
+            document.getElementById('recentStatusText').innerText = "Status: " + last.status;
+            document.getElementById('recentPrice').innerText = "Ksh " + last.price;
+        }
+    });
+}
+
+async function renderOrders() {
+    const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
+    const snap = await getDocs(q);
+    const list = document.getElementById('ordersList');
+    list.innerHTML = snap.empty ? '<p>No orders yet.</p>' : '';
+    snap.forEach(d => {
+        const o = d.data();
+        list.innerHTML += `<div class="mini-order" style="margin-bottom:10px;">
+            <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
+            <div class="details"><h4>${o.item}</h4><small>${o.status}</small></div>
+            <span class="price">Ksh ${o.price}</span>
+        </div>`;
+    });
+}
+
+// --- NAV ---
+window.showPage = (id, el) => {
+    document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
+    const target = document.getElementById(id);
+    target.style.display = 'block';
+    setTimeout(() => target.classList.add('active'), 50);
+    
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    if(el) el.classList.add('active');
+    if(id === 'orders') renderOrders();
+};
+
+document.getElementById('heroOrderBtn').onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
+window.logoutUser = () => signOut(auth).then(() => location.reload());
+document.getElementById('google-login-btn').onclick = () => signInWithPopup(auth, provider);
+
+// Qty Counters
+document.querySelectorAll('.qty-control').forEach(ctrl => {
+    const s = ctrl.querySelector('span');
+    ctrl.querySelector('button:first-child').onclick = () => { let v = parseInt(s.innerText); if(v>1) s.innerText = v-1; };
+    ctrl.querySelector('button:last-child').onclick = () => { s.innerText = parseInt(s.innerText)+1; };
 });
