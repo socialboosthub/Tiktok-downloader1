@@ -340,4 +340,20 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 .nav-item i { font-size: 22px; transition: 0.3s; }
 
-/* Active State
+/* Active State */
+
+/* Important: This hides the pages that are not active */
+.page { 
+    display: none !important; /* The !important forces it to hide */
+    opacity: 0; 
+    transition: opacity 0.3s; 
+    padding-bottom: 20px; 
+}
+
+/* This shows the page only when it has the 'active' class */
+.page.active { 
+    display: block !important; 
+    opacity: 1; 
+    animation: fadeIn 0.3s ease-out; 
+}
+
