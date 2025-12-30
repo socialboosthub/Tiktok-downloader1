@@ -35,7 +35,7 @@
     <header class="top-bar">
         <div class="user-info">
             <small id="welcome-text">Good Morning,</small>
-            <h3 id="usernameDisplay">Egg Lover 🍳</h3>
+            <h3 id="usernameDisplay">Egg Lover 🥚</h3>
         </div>
         <div class="header-actions">
             <div class="profile-pic">
@@ -51,7 +51,7 @@
                 <h2 data-i18n="heroTitle">Kienyeji Specials</h2>
                 <button id="heroOrderBtn">Order Now <i class="fa-solid fa-arrow-right"></i></button>
             </div>
-            <div class="hero-img">🥚</div>
+            <div class="hero-img">🐓</div>
         </div>
 
         <div class="stats-row">
@@ -93,19 +93,31 @@
                     <h3 data-i18n="prodTray">Tray of 30</h3>
                     <div class="price-row"><span>Ksh</span> 450</div>
                     <div class="action-row">
-                        <div class="qty-control"><button>-</button><span>1</span><button>+</button></div>
-                        <button class="add-btn" onclick="window.placeOrder('Tray of 30', 450)"><i class="fa-solid fa-plus"></i></button>
+                        <div class="qty-control">
+                            <button>-</button>
+                            <span class="qty-display">1</span>
+                            <button>+</button>
+                        </div>
+                        <button class="add-btn" onclick="window.placeOrder('Tray of 30', 450, this)">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
                     </div>
                 </div>
             </div>
             <div class="product-card">
-                <div class="prod-img-wrapper"><div class="prod-emoji">🍳</div></div>
+                <div class="prod-img-wrapper"><div class="prod-emoji">🐣</div></div>
                 <div class="prod-details">
                     <h3 data-i18n="prodDozen">Dozen (12)</h3>
                     <div class="price-row"><span>Ksh</span> 200</div>
                     <div class="action-row">
-                        <div class="qty-control"><button>-</button><span>1</span><button>+</button></div>
-                        <button class="add-btn" onclick="window.placeOrder('Dozen (12)', 200)"><i class="fa-solid fa-plus"></i></button>
+                        <div class="qty-control">
+                            <button>-</button>
+                            <span class="qty-display">1</span>
+                            <button>+</button>
+                        </div>
+                        <button class="add-btn" onclick="window.placeOrder('Dozen (12)', 200, this)">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
                     </div>
                 </div>
             </div>
