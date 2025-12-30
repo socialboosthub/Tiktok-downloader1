@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
@@ -84,66 +84,152 @@ window.changeLanguage = async (lang, save = true) => {
 
 // --- LOCATION ---
 window.updateLocation = function() {
-    const address = prompt("Enter Delivery Address (e.g. Estate, House No) or type 'GPS' to use sensor:");
-    if (!address) return;
+    // 1. Ask the user what they want to do
+    const choice = confirm("Press OK to use GPS, or Cancel to type address manually.");
 
-    if (address.toLowerCase() === 'gps' && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-            userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "GPS Coordinates", timestamp: new Date() };
-            saveLoc();
-        }, () => alert("GPS Denied. Please type address manually."));
+    if (choice) {
+        // User wants GPS
+        if (!navigator.geolocation) {
+            alert("GPS not supported by your browser. Please enter manually.");
+            promptAddress();
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                // Success
+                userLocation = { 
+                    lat: pos.coords.latitude, 
+                    lng: pos.coords.longitude, 
+                    address: "GPS Location (Lat/Lng)", 
+                    timestamp: new Date() 
+                };
+                saveLoc();
+            }, 
+            (err) => {
+                // Error / Denied
+                console.error(err);
+                alert("GPS permission was denied or failed. Please type your address.");
+                promptAddress();
+            }
+        );
     } else {
+        // User cancelled, wants manual entry
+        promptAddress();
+    }
+};
+
+function promptAddress() {
+    const address = prompt("Enter your Delivery Address (e.g., Estate Name, House No):");
+    if (address && address.length > 2) {
         userLocation = { lat: null, lng: null, address: address, timestamp: new Date() };
         saveLoc();
     }
-};
+}
 
 async function saveLoc() {
+    if(!userLocation) return;
     document.getElementById('currentCoords').innerText = userLocation.address;
-    await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
-    alert("Location Saved!");
+    if(auth.currentUser) {
+        await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
+        alert("Location Saved Successfully!");
+    }
 }
 
 // --- ORDERS ---
-window.placeOrder = async (item, price) => {
+window.placeOrder = async (item, unitPrice, btnElement) => {
+    if (!auth.currentUser) return alert("Please login first.");
+    
     if (!userLocation) {
-        alert("Set delivery address in settings first!");
-        window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
+        const setNow = confirm("No delivery address set! Go to settings?");
+        if(setNow) window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
         return;
     }
+
+    // NEW LOGIC: Find the quantity relative to the clicked button
+    let quantity = 1;
+    try {
+        // Look for the .qty-control div inside the same container (action-row)
+        const parentRow = btnElement.closest('.action-row');
+        const qtySpan = parentRow.querySelector('.qty-display');
+        quantity = parseInt(qtySpan.innerText);
+    } catch(e) {
+        console.error("Could not find quantity, defaulting to 1", e);
+    }
+
+    const totalPrice = unitPrice * quantity;
+
     await addDoc(collection(db, "orders"), {
         userId: auth.currentUser.uid,
-        item, price, status: 'Pending',
+        item: item, 
+        unitPrice: unitPrice,
+        quantity: quantity,     // Save quantity
+        totalPrice: totalPrice, // Save total
+        status: 'Pending',
         address: userLocation.address,
         createdAt: new Date()
     });
-    alert("Ordered! 🥚");
+    
+    alert(`Order Placed!\n${quantity}x ${item}\nTotal: Ksh ${totalPrice}`);
 };
 
 function listenToOrders() {
-    const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
+    if(!auth.currentUser) return;
+    
+    // Sort orders by createdAt so recent ones are last/first
+    const q = query(
+        collection(db, "orders"), 
+        where("userId", "==", auth.currentUser.uid),
+        orderBy("createdAt", "asc")
+    );
+
     onSnapshot(q, (snap) => {
+        // 1. Update Count on Home
         document.getElementById('homeOrderCount').innerText = snap.size;
+
         if (!snap.empty) {
+            // 2. Update Recent Activity Card (Last order)
             const last = snap.docs[snap.docs.length - 1].data();
-            document.getElementById('recentItemName').innerText = last.item;
+            
+            // Format: "2x Tray of 30"
+            const qtyStr = last.quantity ? `${last.quantity}x ` : '1x ';
+            const priceStr = last.totalPrice ? last.totalPrice : last.price; // Handle old vs new data
+
+            document.getElementById('recentItemName').innerText = qtyStr + last.item;
             document.getElementById('recentStatusText').innerText = "Status: " + last.status;
-            document.getElementById('recentPrice').innerText = "Ksh " + last.price;
+            document.getElementById('recentPrice').innerText = "Ksh " + priceStr;
         }
     });
 }
 
 async function renderOrders() {
-    const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
+    if(!auth.currentUser) return;
+
+    // Use orderBy desc for list view (newest first)
+    const q = query(
+        collection(db, "orders"), 
+        where("userId", "==", auth.currentUser.uid), 
+        orderBy("createdAt", "desc")
+    );
+    
     const snap = await getDocs(q);
     const list = document.getElementById('ordersList');
-    list.innerHTML = snap.empty ? '<p>No orders yet.</p>' : '';
+    list.innerHTML = snap.empty ? '<p style="text-align:center;color:#888;margin-top:20px;">No orders yet.</p>' : '';
+    
     snap.forEach(d => {
         const o = d.data();
-        list.innerHTML += `<div class="mini-order" style="margin-bottom:10px;">
+        // Handle fallback for old orders without quantity/totalPrice
+        const qty = o.quantity || 1;
+        const total = o.totalPrice || o.price;
+        
+        list.innerHTML += `
+        <div class="mini-order" style="margin-bottom:10px;">
             <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
-            <div class="details"><h4>${o.item}</h4><small>${o.status}</small></div>
-            <span class="price">Ksh ${o.price}</span>
+            <div class="details">
+                <h4>${qty}x ${o.item}</h4>
+                <small>${o.status} &bull; ${o.address.substring(0,15)}...</small>
+            </div>
+            <span class="price">Ksh ${total}</span>
         </div>`;
     });
 }
@@ -153,10 +239,13 @@ window.showPage = (id, el) => {
     document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
     const target = document.getElementById(id);
     target.style.display = 'block';
-    setTimeout(() => target.classList.add('active'), 50);
+    
+    // Small delay to allow display:block to render before opacity transition
+    setTimeout(() => target.classList.add('active'), 10);
     
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
     if(el) el.classList.add('active');
+    
     if(id === 'orders') renderOrders();
 };
 
@@ -164,9 +253,19 @@ document.getElementById('heroOrderBtn').onclick = () => window.showPage('shop', 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
 document.getElementById('google-login-btn').onclick = () => signInWithPopup(auth, provider);
 
-// Qty Counters
+// Qty Counters - Setup Event Listeners
 document.querySelectorAll('.qty-control').forEach(ctrl => {
-    const s = ctrl.querySelector('span');
-    ctrl.querySelector('button:first-child').onclick = () => { let v = parseInt(s.innerText); if(v>1) s.innerText = v-1; };
-    ctrl.querySelector('button:last-child').onclick = () => { s.innerText = parseInt(s.innerText)+1; };
+    const s = ctrl.querySelector('.qty-display');
+    const btnMinus = ctrl.children[0];
+    const btnPlus = ctrl.children[2]; // Index 2 because span is index 1
+
+    btnMinus.onclick = () => { 
+        let v = parseInt(s.innerText); 
+        if(v > 1) s.innerText = v - 1; 
+    };
+    
+    btnPlus.onclick = () => { 
+        let v = parseInt(s.innerText);
+        s.innerText = v + 1; 
+    };
 });
