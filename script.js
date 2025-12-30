@@ -1,368 +1,331 @@
-/* =========================================
-   1. VARIABLES & RESET
-   ========================================= */
-:root {
-    /* Brand Palette */
-    --primary: #FFB300;     /* Gold */
-    --primary-dark: #FF8F00;
-    --accent: #FFF8E1;      /* Light Cream */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
+    authDomain: "eggshop-702f6.firebaseapp.com",
+    projectId: "eggshop-702f6",
+    storageBucket: "eggshop-702f6.firebasestorage.app",
+    messagingSenderId: "290586261198",
+    appId: "1:290586261198:web:61cd80463c8c2c5f06429f",
+    measurementId: "G-HVJKWCER6S"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+let userLocation = null;
+
+const translations = {
+    en: { heroTitle: "Fresh Eggs", navShop: "Shop", navSettings: "Settings", myOrders: "My Orders", setTheme: "Dark Mode", setLanguage: "Language", logout: "Logout", statOrders: "Orders", statMember: "Member", prodTray: "Tray of 30", prodDozen: "Dozen (12)", recentActivity: "Recent Activity" },
+    sw: { heroTitle: "Mayai Safi", navShop: "Duka", navSettings: "Mipangilio", myOrders: "Oda Zangu", setTheme: "Giza", setLanguage: "Lugha", logout: "Ondoka", statOrders: "Oda", statMember: "Mwanachama", prodTray: "Tray ya 30", prodDozen: "Dozen (12)", recentActivity: "Shughuli za Hivi Karibuni" }
+};
+
+// --- AUTH HANDLER ---
+onAuthStateChanged(auth, async (user) => {
+    const overlay = document.getElementById('login-overlay');
+    if (user) {
+        // User is logged in
+        if(overlay) overlay.style.display = 'none';
+        document.body.classList.remove('not-logged-in');
+        
+        // Update UI with user details
+        if(document.getElementById('usernameDisplay')) 
+            document.getElementById('usernameDisplay').innerText = user.displayName;
+        if(document.getElementById('userPhoto') && user.photoURL) 
+            document.getElementById('userPhoto').src = user.photoURL;
+        
+        await loadUserSettings();
+        listenToOrders();
+    } else {
+        // User is logged out
+        if(overlay) overlay.style.display = 'flex';
+        document.body.classList.add('not-logged-in');
+    }
+});
+
+// --- LOGIN FUNCTION ---
+// Defined globally so the HTML can find it if needed, though we attach listener below
+window.handleLogin = async () => {
+    try {
+        await signInWithPopup(auth, provider);
+        // onAuthStateChanged will handle the rest
+    } catch (error) {
+        console.error("Login Error:", error);
+        alert("Login Failed: " + error.message);
+    }
+};
+
+// Attach listener safely
+const loginBtn = document.getElementById('google-login-btn');
+if (loginBtn) {
+    loginBtn.onclick = window.handleLogin;
+}
+
+// --- SETTINGS (THEME & LANG) ---
+async function loadUserSettings() {
+    if (!auth.currentUser) return;
+    try {
+        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.theme === 'dark') {
+                document.body.setAttribute('data-theme', 'dark');
+                const toggle = document.getElementById('themeToggle');
+                if(toggle) toggle.checked = true;
+            }
+            if (data.lang) {
+                window.changeLanguage(data.lang, false);
+                const langSelect = document.getElementById('langSelect');
+                if(langSelect) langSelect.value = data.lang;
+            }
+            if (data.location) {
+                userLocation = data.location;
+                const coordEl = document.getElementById('currentCoords');
+                if(coordEl) coordEl.innerText = data.location.address || "GPS Set";
+            }
+        }
+    } catch(e) {
+        console.error("Error loading settings:", e);
+    }
+}
+
+window.toggleTheme = async () => {
+    const toggle = document.getElementById('themeToggle');
+    if(!toggle) return;
     
-    /* Functional Colors */
-    --bg: #F8F9FA;
-    --card: #FFFFFF;
-    --text-main: #1A1D1F;
-    --text-light: #6F767E;
-    --border: #EFEFEF;
+    const isDark = toggle.checked;
+    const theme = isDark ? 'dark' : 'light';
     
-    /* Icon Colors */
-    --blue: #E3F2FD; --blue-text: #2196F3;
-    --green: #E8F5E9; --green-text: #4CAF50;
-    --red: #FFEBEE; --red-text: #F44336;
-    --purple: #F3E5F5; --purple-text: #9C27B0;
+    if (isDark) document.body.setAttribute('data-theme', 'dark');
+    else document.body.removeAttribute('data-theme');
+
+    if (auth.currentUser) {
+        await setDoc(doc(db, "users", auth.currentUser.uid), { theme }, { merge: true });
+    }
+};
+
+window.changeLanguage = async (lang, save = true) => {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang] && translations[lang][key]) {
+            el.innerText = translations[lang][key];
+        }
+    });
+    if (save && auth.currentUser) {
+        await setDoc(doc(db, "users", auth.currentUser.uid), { lang }, { merge: true });
+    }
+};
+
+// --- LOCATION ---
+window.updateLocation = function() {
+    // 1. Force the user to choose
+    const choice = confirm("Press OK to use GPS, or Cancel to type address manually.");
+
+    if (choice) {
+        // User wants GPS
+        if (!navigator.geolocation) {
+            alert("GPS not supported. Please type address.");
+            promptAddress();
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                userLocation = { 
+                    lat: pos.coords.latitude, 
+                    lng: pos.coords.longitude, 
+                    address: "GPS Location (Lat/Lng)", 
+                    timestamp: new Date() 
+                };
+                saveLoc();
+            }, 
+            (err) => {
+                // If denied or failed, IMMEDIATELY ask for manual input
+                console.error("GPS Error:", err);
+                alert("GPS permission denied or failed. Please type your address manually.");
+                promptAddress();
+            },
+            { timeout: 10000, enableHighAccuracy: true }
+        );
+    } else {
+        // User chose manual
+        promptAddress();
+    }
+};
+
+function promptAddress() {
+    const address = prompt("Enter your Delivery Address (e.g., Estate Name, House No):");
+    if (address && address.length > 2) {
+        userLocation = { lat: null, lng: null, address: address, timestamp: new Date() };
+        saveLoc();
+    } else {
+        // Only if they cancel the prompt or type nothing
+        alert("Address is required for delivery.");
+    }
+}
+
+async function saveLoc() {
+    if(!userLocation) return;
+    const coordEl = document.getElementById('currentCoords');
+    if(coordEl) coordEl.innerText = userLocation.address;
     
-    /* Spacing & Radius */
-    --radius-xl: 32px;
-    --radius-lg: 20px;
-    --radius-md: 12px;
+    if(auth.currentUser) {
+        await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
+        alert("Location Saved Successfully!");
+    }
+}
+
+// --- ORDERS ---
+window.placeOrder = async (item, unitPrice, btnElement) => {
+    if (!auth.currentUser) return alert("Please login first.");
     
-    /* Effects */
-    --shadow-soft: 0 10px 40px -10px rgba(0,0,0,0.08);
-    --shadow-card: 0 4px 12px rgba(0,0,0,0.03);
+    if (!userLocation) {
+        const setNow = confirm("No delivery address set! Go to settings?");
+        if(setNow) {
+            const settingsNavItem = document.querySelectorAll('.nav-item')[3];
+            window.showPage('settings', settingsNavItem);
+        }
+        return;
+    }
+
+    // Determine quantity
+    let quantity = 1;
+    try {
+        const parentRow = btnElement.closest('.action-row');
+        const qtySpan = parentRow.querySelector('.qty-display');
+        quantity = parseInt(qtySpan.innerText) || 1;
+    } catch(e) {
+        console.warn("Could not read quantity, defaulting to 1");
+    }
+
+    const totalPrice = unitPrice * quantity;
+
+    try {
+        await addDoc(collection(db, "orders"), {
+            userId: auth.currentUser.uid,
+            item: item, 
+            unitPrice: unitPrice,
+            quantity: quantity,
+            totalPrice: totalPrice,
+            status: 'Pending',
+            address: userLocation.address,
+            createdAt: new Date()
+        });
+        alert(`Order Placed!\n${quantity}x ${item}\nTotal: Ksh ${totalPrice}`);
+    } catch(e) {
+        alert("Error placing order: " + e.message);
+    }
+};
+
+function listenToOrders() {
+    if(!auth.currentUser) return;
     
-    --nav-height: 80px;
+    // Using simple query first to avoid index errors if index not built
+    const q = query(
+        collection(db, "orders"), 
+        where("userId", "==", auth.currentUser.uid)
+        // orderBy("createdAt", "asc") -> removed temporarily to ensure data loads if index is missing
+        // You can re-enable this if you have the Firestore Index created
+    );
+
+    onSnapshot(q, (snap) => {
+        const countEl = document.getElementById('homeOrderCount');
+        if(countEl) countEl.innerText = snap.size;
+
+        if (!snap.empty) {
+            // Manually sort since we removed orderBy
+            const docs = snap.docs.map(d => d.data()).sort((a,b) => a.createdAt - b.createdAt);
+            const last = docs[docs.length - 1];
+            
+            const qtyStr = last.quantity ? `${last.quantity}x ` : '1x ';
+            const priceStr = last.totalPrice || last.price; 
+
+            if(document.getElementById('recentItemName'))
+                document.getElementById('recentItemName').innerText = qtyStr + last.item;
+            
+            if(document.getElementById('recentStatusText'))
+                document.getElementById('recentStatusText').innerText = "Status: " + last.status;
+            
+            if(document.getElementById('recentPrice'))
+                document.getElementById('recentPrice').innerText = "Ksh " + priceStr;
+        }
+    });
 }
 
-/* Dark Mode Overrides */
-[data-theme="dark"] {
-    --bg: #111315;
-    --card: #1A1D1F;
-    --text-main: #EFEFEF;
-    --text-light: #9A9FA5;
-    --border: #272B30;
-    --accent: #272B30;
-    --shadow-soft: 0 10px 40px -10px rgba(0,0,0,0.5);
+async function renderOrders() {
+    if(!auth.currentUser) return;
+
+    const q = query(
+        collection(db, "orders"), 
+        where("userId", "==", auth.currentUser.uid)
+    );
+    
+    const snap = await getDocs(q);
+    const list = document.getElementById('ordersList');
+    if(!list) return;
+
+    list.innerHTML = snap.empty ? '<p style="text-align:center;color:#888;margin-top:20px;">No orders yet.</p>' : '';
+    
+    // Sort locally (Newest first)
+    const docs = snap.docs.map(d => d.data()).sort((a,b) => b.createdAt.seconds - a.createdAt.seconds);
+
+    docs.forEach(o => {
+        const qty = o.quantity || 1;
+        const total = o.totalPrice || o.price;
+        
+        list.innerHTML += `
+        <div class="mini-order" style="margin-bottom:10px;">
+            <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
+            <div class="details">
+                <h4>${qty}x ${o.item}</h4>
+                <small>${o.status}</small>
+            </div>
+            <span class="price">Ksh ${total}</span>
+        </div>`;
+    });
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+// --- NAV ---
+window.showPage = (id, el) => {
+    document.querySelectorAll('.page').forEach(p => { 
+        p.style.display = 'none'; 
+        p.classList.remove('active'); 
+    });
+    
+    const target = document.getElementById(id);
+    if(target) {
+        target.style.display = 'block';
+        setTimeout(() => target.classList.add('active'), 10);
+    }
+    
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    if(el) el.classList.add('active');
+    
+    if(id === 'orders') renderOrders();
+};
 
-body { 
-    margin: 0; 
-    font-family: 'Poppins', sans-serif; 
-    background: var(--bg); 
-    color: var(--text-main); 
-    padding-bottom: 110px; /* Space for nav */
-    transition: background 0.3s ease;
-}
+const heroBtn = document.getElementById('heroOrderBtn');
+if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
 
-/* =========================================
-   2. LOGIN SCREEN (Centered Fix)
-   ========================================= */
-.login-screen {
-    position: fixed; inset: 0;
-    background: #000;
-    z-index: 9999;
-    display: flex; 
-    flex-direction: column; 
-    justify-content: center; /* CENTERED VERTICALLY */
-    align-items: center;     /* CENTERED HORIZONTALLY */
-    padding: 20px;
-    overflow: hidden;
-}
+window.logoutUser = () => signOut(auth).then(() => location.reload());
 
-.login-blobs {
-    position: absolute; width: 100%; height: 100%; top: 0; left: 0;
-}
-.blob {
-    position: absolute; border-radius: 50%;
-    filter: blur(80px); opacity: 0.6;
-}
-.blob-1 { width: 300px; height: 300px; background: #FFB300; top: -100px; left: -50px; }
-.blob-2 { width: 250px; height: 250px; background: #FF6D00; bottom: 20%; right: -50px; }
-
-.login-content {
-    position: relative; z-index: 2;
-    background: rgba(255,255,255,0.1); /* Slightly more visible */
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.1);
-    padding: 50px 30px;
-    border-radius: 40px; /* Rounded all corners */
-    color: white; text-align: center;
-    width: 100%;
-    max-width: 400px; /* Prevent it getting too wide */
-    animation: zoomIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-}
-
-@keyframes zoomIn {
-    from { transform: scale(0.9); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-}
-
-.logo-anim {
-    font-size: 60px; color: var(--primary); margin-bottom: 20px;
-    position: relative; display: inline-block;
-}
-.logo-anim i { animation: float 3s ease-in-out infinite; }
-.yolk-glow {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 60px; height: 60px; background: var(--primary);
-    filter: blur(30px); opacity: 0.5; z-index: -1;
-}
-
-.login-content h1 { font-size: 32px; margin: 0; font-weight: 700; letter-spacing: -1px; }
-.dot { color: var(--primary); }
-.login-content p { color: #aaa; margin: 10px 0 30px; font-weight: 300; }
-
-.google-btn {
-    width: 100%; padding: 18px; border-radius: 16px;
-    background: white; border: none; font-size: 16px; font-weight: 600;
-    color: #000; display: flex; align-items: center; justify-content: center; gap: 10px;
-    cursor: pointer; margin-bottom: 15px;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
-}
-
-.guest-btn {
-    background: transparent; border: 1px solid rgba(255,255,255,0.2);
-    color: white; width: 100%; padding: 15px; border-radius: 16px; font-weight: 500;
-}
-
-.login-footer { margin-top: 30px; font-size: 12px; color: #666; }
-.login-footer a { color: #888; text-decoration: none; }
-
-body.not-logged-in .top-bar, 
-body.not-logged-in .bottom-nav, 
-body.not-logged-in .page { display: none !important; }
-
-/* =========================================
-   3. HEADER
-   ========================================= */
-.top-bar {
-    padding: 20px 24px;
-    display: flex; justify-content: space-between; align-items: center;
-    background: var(--bg);
-    position: sticky; top: 0; z-index: 50;
-}
-
-.user-info small { display: block; color: var(--text-light); font-size: 12px; }
-.user-info h3 { margin: 0; font-size: 20px; color: var(--text-main); }
-
-.header-actions { display: flex; gap: 15px; align-items: center; }
-.icon-btn { 
-    width: 40px; height: 40px; border-radius: 50%; 
-    background: var(--card); border: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: center;
-    color: var(--text-main); position: relative;
-}
-.dot-badge { 
-    position: absolute; top: 10px; right: 10px; 
-    width: 8px; height: 8px; background: #FF4444; border-radius: 50%; 
-}
-.profile-pic img { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--primary); }
-
-/* =========================================
-   4. HOME PAGE
-   ========================================= */
-.hero-card {
-    margin: 10px 24px; padding: 25px;
-    background: linear-gradient(135deg, #1A1D1F 0%, #2C3035 100%);
-    border-radius: var(--radius-xl);
-    color: white; display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 15px 30px -10px rgba(0,0,0,0.4);
-    position: relative; overflow: hidden;
-}
-
-.hero-text { z-index: 2; }
-.tag { background: var(--primary); color: #000; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-.hero-text h2 { margin: 10px 0 15px; font-size: 22px; line-height: 1.2; }
-.hero-text button { 
-    background: white; color: #000; border: none; 
-    padding: 10px 20px; border-radius: 30px; font-weight: 600; font-size: 13px; 
-}
-.hero-img { font-size: 80px; position: absolute; right: -10px; bottom: -20px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3)); }
-
-.stats-row { 
-    display: flex; gap: 15px; padding: 20px 24px; 
-}
-.stat-card {
-    flex: 1; background: var(--card); padding: 15px; 
-    border-radius: var(--radius-lg); display: flex; align-items: center; gap: 15px;
-    box-shadow: var(--shadow-card);
-}
-.stat-card i { font-size: 20px; color: var(--text-light); }
-.stat-card.highlight i { color: var(--primary); }
-.stat-card b { display: block; font-size: 18px; color: var(--text-main); }
-.stat-card span { font-size: 12px; color: var(--text-light); }
-
-.section-header { padding: 0 24px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.section-header h3 { margin: 0; font-size: 18px; }
-.section-header a { font-size: 13px; color: var(--primary-dark); text-decoration: none; font-weight: 600; }
-
-.mini-order {
-    margin: 0 24px; background: var(--card); padding: 15px;
-    border-radius: var(--radius-md); display: flex; align-items: center; gap: 15px;
-    border: 1px solid var(--border);
-}
-.icon-box { 
-    width: 40px; height: 40px; background: var(--green); color: var(--green-text);
-    border-radius: 10px; display: flex; align-items: center; justify-content: center;
-}
-.mini-order .details { flex: 1; }
-.mini-order h4 { margin: 0; font-size: 14px; color: var(--text-main); }
-.mini-order small { color: var(--text-light); font-size: 11px; }
-.mini-order .price { font-weight: 700; font-size: 14px; color: var(--text-main); }
-
-/* =========================================
-   5. SHOP PAGE
-   ========================================= */
-.page-title { padding: 0 24px; margin: 10px 0 20px; font-size: 24px; }
-
-.category-tabs { 
-    padding: 0 24px 20px; display: flex; gap: 10px; overflow-x: auto; 
-}
-.tab {
-    padding: 8px 20px; border-radius: 30px; border: 1px solid var(--border);
-    background: var(--card); color: var(--text-light); font-size: 13px; font-weight: 600;
-}
-.tab.active { background: var(--text-main); color: white; border-color: var(--text-main); }
-
-.product-grid { 
-    padding: 0 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; 
-}
-
-.product-card {
-    background: var(--card); border-radius: var(--radius-lg); padding: 10px;
-    box-shadow: var(--shadow-card);
-}
-.prod-img-wrapper {
-    background: var(--accent); border-radius: var(--radius-md);
-    height: 120px; display: flex; align-items: center; justify-content: center;
-    position: relative;
-}
-.discount-tag {
-    position: absolute; top: 8px; left: 8px;
-    background: #FF4444; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700;
-}
-.prod-emoji { font-size: 50px; }
-
-.prod-details { padding: 10px 5px; }
-.prod-details h3 { margin: 0; font-size: 15px; font-weight: 600; }
-.prod-details .desc { margin: 4px 0 10px; font-size: 11px; color: var(--text-light); }
-
-.price-row { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; }
-.price-row .currency { font-size: 12px; color: var(--primary-dark); margin-right: 2px; }
-
-.action-row { display: flex; justify-content: space-between; align-items: center; }
-
-.qty-control {
-    display: flex; align-items: center; background: var(--bg);
-    border-radius: 8px; padding: 2px;
-}
-.qty-control button {
-    width: 24px; height: 24px; border: none; background: transparent;
-    font-weight: 700; color: var(--text-main);
-}
-.qty-control span { font-size: 12px; font-weight: 600; width: 15px; text-align: center; }
-
-.add-btn {
-    width: 32px; height: 32px; background: var(--text-main); color: white;
-    border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-}
-
-/* =========================================
-   6. SETTINGS PAGE (Reimagined)
-   ========================================= */
-.settings-section {
-    background: var(--card); margin: 0 24px 20px;
-    border-radius: var(--radius-lg); padding: 5px 0;
-    box-shadow: var(--shadow-card); border: 1px solid var(--border);
-}
-.settings-header {
-    margin: 15px 20px 5px; font-size: 12px; text-transform: uppercase;
-    color: var(--text-light); letter-spacing: 1px;
-}
-
-.setting-item {
-    display: flex; align-items: center; padding: 15px 20px;
-    border-bottom: 1px solid var(--border);
-}
-.setting-item:last-child { border-bottom: none; }
-.setting-item.clickable:active { background: var(--bg); }
-
-.icon-wrap {
-    width: 36px; height: 36px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    margin-right: 15px; font-size: 16px;
-}
-/* Icon Colors */
-.color-blue { background: var(--blue); color: var(--blue-text); }
-.color-green { background: var(--green); color: var(--green-text); }
-.color-orange { background: #FFF3E0; color: #FF9800; }
-.color-red { background: var(--red); color: var(--red-text); }
-.color-purple { background: var(--purple); color: var(--purple-text); }
-.color-teal { background: #E0F2F1; color: #009688; }
-.color-gray { background: #F5F5F5; color: #616161; }
-.color-danger { background: #FFEBEE; color: #D32F2F; }
-
-.setting-item .text { flex: 1; font-size: 14px; font-weight: 500; }
-.arrow { color: #CCC; font-size: 12px; }
-.danger-text { color: #D32F2F; font-weight: 600; }
-
-.version-text { text-align: center; font-size: 11px; color: var(--text-light); opacity: 0.5; margin-bottom: 20px; }
-
-/* Switch Toggle */
-.switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider {
-    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #E0E0E0; transition: .4s; border-radius: 34px;
-}
-.slider:before {
-    position: absolute; content: ""; height: 20px; width: 20px;
-    left: 2px; bottom: 2px; background-color: white;
-    transition: .4s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-input:checked + .slider { background-color: var(--primary); }
-input:checked + .slider:before { transform: translateX(20px); }
-
-/* Minimal Select */
-.minimal-select {
-    border: none; background: transparent; color: var(--text-light);
-    font-family: inherit; font-size: 13px; text-align: right;
-}
-
-/* =========================================
-   7. NAVIGATION (Floating Notch)
-   ========================================= */
-.bottom-nav {
-    position: fixed; bottom: 0; width: 100%;
-    height: var(--nav-height);
-    background: var(--card);
-    display: flex; justify-content: space-around; align-items: center;
-    border-top: 1px solid var(--border);
-    border-radius: 30px 30px 0 0;
-    box-shadow: 0 -10px 40px rgba(0,0,0,0.05);
-    z-index: 100;
-}
-
-.nav-item {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    width: 60px; height: 60px; border-radius: 50%;
-    color: var(--text-light); transition: 0.3s;
-}
-
-.nav-item i { font-size: 22px; transition: 0.3s; }
-
-/* Important: This hides the pages that are not active */
-.page { 
-    display: none !important; 
-    opacity: 0; 
-    transition: opacity 0.3s; 
-    padding-bottom: 20px; 
-}
-
-/* This shows the page only when it has the 'active' class */
-.page.active { 
-    display: block !important; 
-    opacity: 1; 
-    animation: fadeIn 0.3s ease-out; 
-}
+// Qty Counters
+document.querySelectorAll('.qty-control').forEach(ctrl => {
+    const s = ctrl.querySelector('.qty-display');
+    const btns = ctrl.querySelectorAll('button');
+    if(btns.length >= 2 && s) {
+        btns[0].onclick = () => { 
+            let v = parseInt(s.innerText); 
+            if(v > 1) s.innerText = v - 1; 
+        };
+        btns[1].onclick = () => { 
+            let v = parseInt(s.innerText);
+            s.innerText = v + 1; 
+        };
+    }
+});
