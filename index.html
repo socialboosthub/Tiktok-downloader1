@@ -16,7 +16,6 @@
             <div class="blob blob-1"></div>
             <div class="blob blob-2"></div>
         </div>
-        
         <div class="login-content">
             <div class="logo-anim">
                 <i class="fa-solid fa-egg"></i>
@@ -24,33 +23,23 @@
             </div>
             <h1>EggMaster<span class="dot">.</span></h1>
             <p>Farm fresh goodness, delivered daily.</p>
-            
             <div class="login-actions">
                 <button id="google-login-btn" class="google-btn">
                     <i class="fa-brands fa-google"></i>
                     Continue with Google
                 </button>
-                <button class="guest-btn">Browse as Guest</button>
-            </div>
-            
-            <div class="login-footer">
-                <p>By continuing, you agree to our <a href="#">Terms</a></p>
             </div>
         </div>
     </div>
 
     <header class="top-bar">
         <div class="user-info">
-            <small>Good Morning,</small>
+            <small id="welcome-text">Good Morning,</small>
             <h3 id="usernameDisplay">Egg Lover 🍳</h3>
         </div>
         <div class="header-actions">
-            <div class="icon-btn badge-wrapper">
-                <i class="fa-solid fa-bell"></i>
-                <span class="dot-badge"></span>
-            </div>
             <div class="profile-pic">
-                <img src="https://ui-avatars.com/api/?name=Egg+Master&background=FFB300&color=fff" alt="User">
+                <img src="https://ui-avatars.com/api/?name=User&background=FFB300&color=fff" id="userPhoto" alt="User">
             </div>
         </div>
     </header>
@@ -59,96 +48,64 @@
         <div class="hero-card">
             <div class="hero-text">
                 <span class="tag">Free Delivery</span>
-                <h2>Kienyeji Specials</h2>
-                <button>Order Now <i class="fa-solid fa-arrow-right"></i></button>
+                <h2 data-i18n="heroTitle">Kienyeji Specials</h2>
+                <button id="heroOrderBtn">Order Now <i class="fa-solid fa-arrow-right"></i></button>
             </div>
             <div class="hero-img">🥚</div>
         </div>
 
         <div class="stats-row">
-            <div class="stat-card">
-    <i class="fa-solid fa-fire"></i>
-    <div>
-        <b id="homeOrderCount">0</b>
-        <span>Orders</span>
-    </div>
-</div>
-
             <div class="stat-card highlight">
+                <i class="fa-solid fa-basket-shopping"></i>
+                <div>
+                    <b id="homeOrderCount">0</b>
+                    <span data-i18n="statOrders">Orders</span>
+                </div>
+            </div>
+            <div class="stat-card">
                 <i class="fa-solid fa-crown"></i>
                 <div>
                     <b>Gold</b>
-                    <span>Status</span>
+                    <span data-i18n="statMember">Member</span>
                 </div>
             </div>
         </div>
 
         <div class="section-header">
-            <h3>Recent Activity</h3>
-            <a href="#" onclick="window.showPage('orders', document.querySelector('.nav-item:nth-child(3)'))">See All</a>
+            <h3 data-i18n="recentActivity">Recent Activity</h3>
         </div>
-        <div class="mini-order">
-            <div class="icon-box"><i class="fa-solid fa-check"></i></div>
+        <div class="mini-order" id="homeRecentCard">
+            <div class="icon-box"><i class="fa-solid fa-clock"></i></div>
             <div class="details">
-                <h4>Tray of 30</h4>
-                <small>Delivered Yesterday</small>
+                <h4 id="recentItemName">No orders yet</h4>
+                <small id="recentStatusText">Start shopping today!</small>
             </div>
-            <span class="price">Ksh 450</span>
+            <span class="price" id="recentPrice">--</span>
         </div>
     </section>
 
     <section id="shop" class="page">
-        <h2 class="page-title">Fresh Stock</h2>
-        <div class="category-tabs">
-            <button class="tab active">All</button>
-            <button class="tab">Kienyeji</button>
-            <button class="tab">Grade</button>
-        </div>
-
+        <h2 class="page-title" data-i18n="navShop">Shop</h2>
         <div class="product-grid">
             <div class="product-card">
-                <div class="prod-img-wrapper">
-                    <span class="discount-tag">-10%</span>
-                    <div class="prod-emoji">🥚</div>
-                </div>
+                <div class="prod-img-wrapper"><div class="prod-emoji">🥚</div></div>
                 <div class="prod-details">
-                    <h3>Tray of 30</h3>
-                    <p class="desc">Standard Grade Layers</p>
-                    <div class="price-row">
-                        <span class="currency">Ksh</span> 450
-                    </div>
+                    <h3 data-i18n="prodTray">Tray of 30</h3>
+                    <div class="price-row"><span>Ksh</span> 450</div>
                     <div class="action-row">
-                        <div class="qty-control">
-                            <button>-</button>
-                            <span>1</span>
-                            <button>+</button>
-                        </div>
-                        <button class="add-btn" onclick="window.placeOrder('Tray of 30', '450')">
-                            <i class="fa-solid fa-plus"></i>
-                        </button>
+                        <div class="qty-control"><button>-</button><span>1</span><button>+</button></div>
+                        <button class="add-btn" onclick="window.placeOrder('Tray of 30', 450)"><i class="fa-solid fa-plus"></i></button>
                     </div>
                 </div>
             </div>
-
             <div class="product-card">
-                <div class="prod-img-wrapper">
-                    <div class="prod-emoji">🍳</div>
-                </div>
+                <div class="prod-img-wrapper"><div class="prod-emoji">🍳</div></div>
                 <div class="prod-details">
-                    <h3>Dozen (12)</h3>
-                    <p class="desc">Perfect for breakfast</p>
-                    <div class="price-row">
-                        <span class="currency">Ksh</span> 200
-                    </div>
+                    <h3 data-i18n="prodDozen">Dozen (12)</h3>
+                    <div class="price-row"><span>Ksh</span> 200</div>
                     <div class="action-row">
-                        <div class="qty-control">
-                            <button>-</button>
-                            <span>1</span>
-                            <button>+</button>
-                        </div>
-                        <button class="add-btn" onclick="window.placeOrder('Dozen (12)', '200')">
-                            <i class="fa-solid fa-plus"></i>
-                        </button>
+                        <div class="qty-control"><button>-</button><span>1</span><button>+</button></div>
+                        <button class="add-btn" onclick="window.placeOrder('Dozen (12)', 200)"><i class="fa-solid fa-plus"></i></button>
                     </div>
                 </div>
             </div>
@@ -156,108 +113,48 @@
     </section>
 
     <section id="orders" class="page">
-        <h2 class="page-title">My Orders</h2>
-        <div class="orders-filter">
-            <button class="active">Active</button>
-            <button>Completed</button>
-        </div>
-        <div id="ordersList" class="orders-list">
-            <div class="empty-state">
-                <i class="fa-solid fa-basket-shopping"></i>
-                <p>No active orders</p>
-                <button onclick="window.showPage('shop', document.querySelector('.nav-item:nth-child(2)'))">Start Shopping</button>
-            </div>
-        </div>
+        <h2 class="page-title" data-i18n="myOrders">My Orders</h2>
+        <div id="ordersList" class="orders-list"></div>
     </section>
 
     <section id="settings" class="page">
-        <h2 class="page-title">Settings</h2>
-        
+        <h2 class="page-title" data-i18n="navSettings">Settings</h2>
         <div class="settings-section">
-            <h4 class="settings-header">Account</h4>
-            <div class="setting-item clickable">
-                <div class="icon-wrap color-blue"><i class="fa-solid fa-user"></i></div>
-                <div class="text">Edit Profile</div>
-                <i class="fa-solid fa-chevron-right arrow"></i>
-            </div>
             <div class="setting-item clickable" onclick="window.updateLocation()">
-    <div class="icon-wrap color-green"><i class="fa-solid fa-location-dot"></i></div>
-    <div class="text">
-        <div id="locationStatus">Delivery Address</div>
-        <small id="currentCoords" style="font-size: 10px; color: var(--text-light); display: block;">Tap to set location</small>
-    </div>
-    <i class="fa-solid fa-chevron-right arrow"></i>
-</div>
-
-</div>
-
-            <div class="setting-item clickable">
-                <div class="icon-wrap color-purple"><i class="fa-solid fa-credit-card"></i></div>
-                <div class="text">Payment Methods</div>
+                <div class="icon-wrap color-green"><i class="fa-solid fa-location-dot"></i></div>
+                <div class="text">
+                    <div id="locationStatus">Delivery Address</div>
+                    <small id="currentCoords">Tap to set location</small>
+                </div>
                 <i class="fa-solid fa-chevron-right arrow"></i>
             </div>
         </div>
-
         <div class="settings-section">
-            <h4 class="settings-header">Preferences</h4>
-            
             <div class="setting-item">
                 <div class="icon-wrap color-orange"><i class="fa-solid fa-moon"></i></div>
-                <div class="text">Dark Mode</div>
+                <div class="text" data-i18n="setTheme">Dark Mode</div>
                 <label class="switch">
                     <input type="checkbox" id="themeToggle" onchange="window.toggleTheme()">
                     <span class="slider"></span>
                 </label>
             </div>
-
-            <div class="setting-item">
-                <div class="icon-wrap color-red"><i class="fa-solid fa-bell"></i></div>
-                <div class="text">Push Notifications</div>
-                <label class="switch">
-                    <input type="checkbox" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-
             <div class="setting-item">
                 <div class="icon-wrap color-teal"><i class="fa-solid fa-globe"></i></div>
-                <div class="text">Language</div>
+                <div class="text" data-i18n="setLanguage">Language</div>
                 <select id="langSelect" onchange="window.changeLanguage(this.value)" class="minimal-select">
                     <option value="en">English</option>
                     <option value="sw">Kiswahili</option>
                 </select>
             </div>
         </div>
-
-        <div class="settings-section">
-            <h4 class="settings-header">Support</h4>
-            <div class="setting-item clickable">
-                <div class="icon-wrap color-gray"><i class="fa-solid fa-headset"></i></div>
-                <div class="text">Help Center</div>
-            </div>
-            <div class="setting-item clickable" onclick="window.logoutUser()">
-                <div class="icon-wrap color-danger"><i class="fa-solid fa-right-from-bracket"></i></div>
-                <div class="text danger-text">Log Out</div>
-            </div>
-        </div>
-        
-        <p class="version-text">EggMaster v2.0.1</p>
+        <button class="logout-btn" onclick="window.logoutUser()" data-i18n="logout" style="width: calc(100% - 48px); margin: 24px; padding: 15px; border-radius: 12px; border: none; background: #FFEBEE; color: #F44336; font-weight: 700;">Logout</button>
     </section>
 
     <nav class="bottom-nav">
-        <div class="nav-indicator"></div>
-        <div class="nav-item active" onclick="window.showPage('home', this)">
-            <i class="fa-solid fa-house-chimney"></i>
-        </div>
-        <div class="nav-item" onclick="window.showPage('shop', this)">
-            <i class="fa-solid fa-bag-shopping"></i>
-        </div>
-        <div class="nav-item" onclick="window.showPage('orders', this)">
-            <i class="fa-solid fa-receipt"></i>
-        </div>
-        <div class="nav-item" onclick="window.showPage('settings', this)">
-            <i class="fa-solid fa-sliders"></i>
-        </div>
+        <div class="nav-item active" onclick="window.showPage('home', this)"><i class="fa-solid fa-house"></i></div>
+        <div class="nav-item" onclick="window.showPage('shop', this)"><i class="fa-solid fa-bag-shopping"></i></div>
+        <div class="nav-item" onclick="window.showPage('orders', this)"><i class="fa-solid fa-receipt"></i></div>
+        <div class="nav-item" onclick="window.showPage('settings', this)"><i class="fa-solid fa-sliders"></i></div>
     </nav>
 
 </body>
