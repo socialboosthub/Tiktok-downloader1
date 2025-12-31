@@ -19,9 +19,15 @@ const provider = new GoogleAuthProvider();
 
 let userLocation = null;
 
+// Mombasa Areas Database
+const MOMBASA_AREAS = [
+    "Nyali", "Bamburi", "Tudor", "Kizingo", "Mtwapa", "Likoni", 
+    "Changamwe", "Mikindani", "Ganjoni", "Mombasa Island", "Shanzu", "Mkomani"
+];
+
 const translations = {
-    en: { heroTitle: "Fresh Eggs", navShop: "Shop", navSettings: "Settings", myOrders: "My Orders", setTheme: "Dark Mode", setLanguage: "Language", logout: "Logout", statOrders: "Total Orders", prodTray: "Tray of 30", recentActivity: "Recent Activity" },
-    sw: { heroTitle: "Mayai Safi", navShop: "Duka", navSettings: "Mipangilio", myOrders: "Oda Zangu", setTheme: "Giza", setLanguage: "Lugha", logout: "Ondoka", statOrders: "Jumla ya Oda", prodTray: "Tray ya 30", recentActivity: "Shughuli za Hivi Karibuni" }
+    en: { heroTitle: "Bulk Fresh Eggs", navShop: "Shop", navSettings: "Settings", myOrders: "My Orders", setTheme: "Dark Mode", setLanguage: "Language", logout: "Logout", statOrders: "My Orders", prodTray: "Tray of 30", recentActivity: "Recent Activity" },
+    sw: { heroTitle: "Mayai Kwa Jumla", navShop: "Duka", navSettings: "Mipangilio", myOrders: "Oda Zangu", setTheme: "Giza", setLanguage: "Lugha", logout: "Ondoka", statOrders: "Oda Zangu", prodTray: "Tray ya 30", recentActivity: "Shughuli za Hivi Karibuni" }
 };
 
 // --- AUTH HANDLER ---
@@ -34,7 +40,7 @@ onAuthStateChanged(auth, async (user) => {
         updateUIWithUser(user);
         await loadUserSettings();
         listenToOrders();
-        listenToNotifications(); // Start listening for user-specific notifications
+        listenToNotifications(); 
     } else {
         if(overlay) overlay.style.display = 'flex';
         document.body.classList.add('not-logged-in');
@@ -43,7 +49,7 @@ onAuthStateChanged(auth, async (user) => {
 
 function updateUIWithUser(user) {
     if(document.getElementById('usernameDisplay')) 
-        document.getElementById('usernameDisplay').innerText = user.displayName || "User";
+        document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
     if(document.getElementById('userPhoto') && user.photoURL) 
         document.getElementById('userPhoto').src = user.photoURL;
 }
@@ -52,15 +58,13 @@ window.handleLogin = async () => {
     try { await signInWithPopup(auth, provider); } 
     catch (error) { alert("Login Failed: " + error.message); }
 };
-
 const loginBtn = document.getElementById('google-login-btn');
 if (loginBtn) loginBtn.onclick = window.handleLogin;
 
-// --- PROFILE EDITING ---
+// --- PROFILE EDITING (FIXED) ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
-    
     document.getElementById('editNameInput').value = user.displayName || "";
     document.getElementById('editPhotoInput').value = user.photoURL || "";
     document.getElementById('profile-modal').style.display = 'flex';
@@ -77,22 +81,27 @@ window.saveProfile = async () => {
     if(!name) return alert("Name cannot be empty");
 
     try {
+        // 1. Update Firebase Auth Profile
         await updateProfile(auth.currentUser, {
             displayName: name,
             photoURL: photo
         });
         
-        // Also update Firestore user doc
+        // 2. Update Firestore User Document
         await setDoc(doc(db, "users", auth.currentUser.uid), { 
             name: name,
             photo: photo 
         }, { merge: true });
 
-        updateUIWithUser(auth.currentUser);
+        // 3. Force UI Update immediately
+        document.getElementById('usernameDisplay').innerText = name;
+        if(photo) document.getElementById('userPhoto').src = photo;
+
         window.closeProfileModal();
-        alert("Profile Updated!");
+        alert("Profile Updated Successfully!");
     } catch(e) {
         alert("Error updating profile: " + e.message);
+        console.error(e);
     }
 };
 
@@ -138,28 +147,55 @@ window.changeLanguage = async (lang, save = true) => {
     if (save && auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { lang }, { merge: true });
 };
 
-// --- LOCATION ---
-window.updateLocation = function() {
-    const choice = confirm("Press OK to use GPS, or Cancel to type address manually.");
+// --- LOCATION SYSTEM (Mombasa & Search) ---
+window.initLocationFlow = function() {
+    const choice = confirm("Use GPS to find your location automatically?\nPress Cancel to search for a Mombasa Area manually.");
     if (choice) {
-        if (!navigator.geolocation) return promptAddress();
+        if (!navigator.geolocation) return window.openLocationSearch();
         navigator.geolocation.getCurrentPosition(
             async (pos) => {
-                userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "GPS Location (Lat/Lng)", timestamp: new Date() };
+                // In a real app, use Reverse Geocoding API here to get address name
+                // For now we simulate success
+                userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "GPS Location (Mombasa)", timestamp: new Date() };
                 saveLoc();
+                alert("GPS Location set!");
             }, 
-            () => { alert("GPS failed."); promptAddress(); }
+            () => { alert("GPS failed or denied."); window.openLocationSearch(); }
         );
-    } else promptAddress();
+    } else {
+        window.openLocationSearch();
+    }
 };
 
-function promptAddress() {
-    const address = prompt("Enter your Delivery Address:");
-    if (address && address.length > 2) {
-        userLocation = { lat: null, lng: null, address: address, timestamp: new Date() };
-        saveLoc();
-    }
-}
+window.openLocationSearch = () => {
+    const modal = document.getElementById('location-modal');
+    modal.style.display = 'flex';
+    window.renderLocationList(MOMBASA_AREAS);
+};
+
+window.renderLocationList = (areas) => {
+    const list = document.getElementById('locationList');
+    list.innerHTML = '';
+    areas.forEach(area => {
+        const item = document.createElement('div');
+        item.className = 'location-item';
+        item.innerHTML = `<i class="fa-solid fa-map-pin"></i> ${area}, Mombasa`;
+        item.onclick = () => window.selectLocation(area + ", Mombasa");
+        list.appendChild(item);
+    });
+};
+
+window.filterLocations = () => {
+    const query = document.getElementById('locSearch').value.toLowerCase();
+    const filtered = MOMBASA_AREAS.filter(a => a.toLowerCase().includes(query));
+    window.renderLocationList(filtered);
+};
+
+window.selectLocation = (address) => {
+    userLocation = { lat: null, lng: null, address: address, timestamp: new Date() };
+    saveLoc();
+    document.getElementById('location-modal').style.display = 'none';
+};
 
 async function saveLoc() {
     if(!userLocation) return;
@@ -167,16 +203,7 @@ async function saveLoc() {
     if(auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
 }
 
-// --- NOTIFICATIONS SYSTEM ---
-window.toggleNotifications = () => {
-    const panel = document.getElementById('notifPanel');
-    panel.classList.toggle('show');
-    // Hide badge when opened
-    if(panel.classList.contains('show')) {
-        document.getElementById('notifBadge').style.display = 'none';
-    }
-};
-
+// --- NOTIFICATIONS PAGE ---
 async function createNotification(msg) {
     if(!auth.currentUser) return;
     await addDoc(collection(db, "notifications"), {
@@ -190,54 +217,67 @@ async function createNotification(msg) {
 function listenToNotifications() {
     if(!auth.currentUser) return;
     
-    // Query only notifications for THIS user
+    // Listen strictly for THIS user's notifications
     const q = query(
         collection(db, "notifications"), 
         where("userId", "==", auth.currentUser.uid)
     );
 
     onSnapshot(q, (snap) => {
-        const list = document.getElementById('notifList');
+        const list = document.getElementById('fullNotifList');
         const badge = document.getElementById('notifBadge');
         
-        // Sort in memory
         const notifs = snap.docs.map(d => d.data()).sort((a,b) => b.timestamp - a.timestamp);
         
         if (notifs.length > 0) {
-            list.innerHTML = '';
-            notifs.forEach(n => {
-                list.innerHTML += `
-                    <div class="notif-item">
-                        <i class="fa-solid fa-circle-info" style="color:var(--primary); margin-top:3px;"></i>
-                        <div>
-                            <div>${n.message}</div>
-                            <small>Just now</small>
-                        </div>
-                    </div>
-                `;
-            });
-            // Show badge if we have items
             badge.style.display = 'block';
+            if(list) {
+                list.innerHTML = '';
+                notifs.forEach(n => {
+                    // Calculate time ago
+                    const date = n.timestamp.toDate ? n.timestamp.toDate() : new Date(n.timestamp);
+                    const timeStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+
+                    list.innerHTML += `
+                        <div class="notif-card">
+                            <div class="notif-icon"><i class="fa-solid fa-bell"></i></div>
+                            <div class="notif-content">
+                                <div class="msg">${n.message}</div>
+                                <div class="time">${timeStr}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
         } else {
-            list.innerHTML = '<p class="empty-msg">No notifications.</p>';
             badge.style.display = 'none';
+            if(list) list.innerHTML = '<p class="empty-msg">No notifications yet.</p>';
         }
     });
 }
 
-// --- ORDERS ---
-window.placeOrder = async (item, unitPrice, btnElement) => {
+// --- SHOP (Min 30 Logic) ---
+window.updateQty = (change) => {
+    const display = document.getElementById('shopQty');
+    let current = parseInt(display.innerText);
+    let newVal = current + change;
+    if(newVal < 30) newVal = 30; // Enforce Minimum 30
+    display.innerText = newVal;
+};
+
+window.placeOrder = async (item, unitPrice) => {
     if (!auth.currentUser) return alert("Please login first.");
     if (!userLocation) {
         if(confirm("No delivery address! Set one now?")) window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
         return;
     }
 
-    let quantity = 1;
-    try {
-        const parentRow = btnElement.closest('.action-row');
-        quantity = parseInt(parentRow.querySelector('.qty-display').innerText) || 1;
-    } catch(e) {}
+    const quantity = parseInt(document.getElementById('shopQty').innerText);
+    
+    if(quantity < 30) {
+        alert("Minimum order is 30 Trays.");
+        return;
+    }
 
     const totalPrice = unitPrice * quantity;
 
@@ -250,10 +290,11 @@ window.placeOrder = async (item, unitPrice, btnElement) => {
             createdAt: new Date()
         });
         
-        // Send Notification to self
-        createNotification(`Order placed: ${quantity}x ${item} for Ksh ${totalPrice}`);
+        // Create Notification for the user
+        await createNotification(`Order Placed: ${quantity}x ${item}. Total: Ksh ${totalPrice}`);
         
-        alert(`Order Placed!`);
+        alert(`Success! Order placed for ${quantity} trays.`);
+        window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
     } catch(e) {
         alert("Error: " + e.message);
     }
@@ -277,13 +318,11 @@ function listenToOrders() {
             if(document.getElementById('recentStatusText')) document.getElementById('recentStatusText').innerText = "Status: " + last.status;
             if(document.getElementById('recentPrice')) document.getElementById('recentPrice').innerText = "Ksh " + priceStr;
         }
+        renderOrdersList(snap);
     });
 }
 
-async function renderOrders() {
-    if(!auth.currentUser) return;
-    const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
-    const snap = await getDocs(q);
+function renderOrdersList(snap) {
     const list = document.getElementById('ordersList');
     if(!list) return;
 
@@ -298,7 +337,7 @@ async function renderOrders() {
             <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
             <div class="details">
                 <h4>${qty}x ${o.item}</h4>
-                <small>${o.status} &bull; ${o.address.substring(0,15)}...</small>
+                <small>${o.status} &bull; ${o.address}</small>
             </div>
             <span class="price">Ksh ${total}</span>
         </div>`;
@@ -311,21 +350,16 @@ window.showPage = (id, el) => {
     const target = document.getElementById(id);
     if(target) { target.style.display = 'block'; setTimeout(() => target.classList.add('active'), 10); }
     
+    // Update nav icons
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    if(el) el.classList.add('active');
-    if(id === 'orders') renderOrders();
+    if(el) {
+        el.classList.add('active');
+    } else {
+        // If no element passed (e.g. from bell icon), deactivate all bottom navs
+    }
 };
 
 const heroBtn = document.getElementById('heroOrderBtn');
 if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
-
-document.querySelectorAll('.qty-control').forEach(ctrl => {
-    const s = ctrl.querySelector('.qty-display');
-    const btns = ctrl.querySelectorAll('button');
-    if(btns.length >= 2 && s) {
-        btns[0].onclick = () => { let v = parseInt(s.innerText); if(v > 1) s.innerText = v - 1; };
-        btns[1].onclick = () => { let v = parseInt(s.innerText); s.innerText = v + 1; };
-    }
-});
