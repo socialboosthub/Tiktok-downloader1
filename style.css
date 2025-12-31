@@ -357,3 +357,31 @@ input:checked + .slider:before { transform: translateX(20px); }
     opacity: 1; 
     animation: fadeIn 0.3s ease-out; 
 }
+
+/* =========================================
+   7. FLOATING WHATSAPP BUTTON (NEW)
+   ========================================= */
+.whatsapp-float {
+    position: fixed;
+    width: 60px; height: 60px;
+    bottom: 100px; /* Above nav bar */
+    right: 20px;
+    background-color: #25d366;
+    color: #FFF;
+    border-radius: 50px;
+    text-align: center;
+    font-size: 30px;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+    z-index: 900;
+    display: flex; align-items: center; justify-content: center;
+    text-decoration: none;
+    transition: transform 0.3s;
+}
+
+.whatsapp-float:hover {
+    transform: scale(1.1);
+}
+
+.whatsapp-float:active {
+    transform: scale(0.9);
+}
