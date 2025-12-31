@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
@@ -8,8 +8,7 @@ const firebaseConfig = {
     projectId: "eggshop-702f6",
     storageBucket: "eggshop-702f6.firebasestorage.app",
     messagingSenderId: "290586261198",
-    appId: "1:290586261198:web:61cd80463c8c2c5f06429f",
-    measurementId: "G-HVJKWCER6S"
+    appId: "1:290586261198:web:61cd80463c8c2c5f06429f"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -17,20 +16,12 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
+let currentPrice = 450; // Default fallback
 let userLocation = null;
+let map, marker;
+const ADMIN_EMAILS = ["ashrafsquad001@gmail.com", "abdulraxmanxamza@gmail.com"];
 
-// Mombasa Areas Database
-const MOMBASA_AREAS = [
-    "Nyali", "Bamburi", "Tudor", "Kizingo", "Mtwapa", "Likoni", 
-    "Changamwe", "Mikindani", "Ganjoni", "Mombasa Island", "Shanzu", "Mkomani"
-];
-
-const translations = {
-    en: { heroTitle: "Bulk Fresh Eggs", navShop: "Shop", navSettings: "Settings", myOrders: "My Orders", setTheme: "Dark Mode", setLanguage: "Language", logout: "Logout", statOrders: "My Orders", prodTray: "Tray of 30", recentActivity: "Recent Activity" },
-    sw: { heroTitle: "Mayai Kwa Jumla", navShop: "Duka", navSettings: "Mipangilio", myOrders: "Oda Zangu", setTheme: "Giza", setLanguage: "Lugha", logout: "Ondoka", statOrders: "Oda Zangu", prodTray: "Tray ya 30", recentActivity: "Shughuli za Hivi Karibuni" }
-};
-
-// --- AUTH HANDLER ---
+// --- AUTH ---
 onAuthStateChanged(auth, async (user) => {
     const overlay = document.getElementById('login-overlay');
     if (user) {
@@ -38,9 +29,14 @@ onAuthStateChanged(auth, async (user) => {
         document.body.classList.remove('not-logged-in');
         
         updateUIWithUser(user);
-        await loadUserSettings();
-        listenToOrders();
-        listenToNotifications(); 
+        loadUserLocation();
+        listenToNotifications();
+        listenToPrice(); // Fetch live price
+        
+        // Show Admin Button if admin
+        if(ADMIN_EMAILS.includes(user.email)) {
+            document.getElementById('adminLink').style.display = 'flex';
+        }
     } else {
         if(overlay) overlay.style.display = 'flex';
         document.body.classList.add('not-logged-in');
@@ -58,308 +54,172 @@ window.handleLogin = async () => {
     try { await signInWithPopup(auth, provider); } 
     catch (error) { alert("Login Failed: " + error.message); }
 };
-const loginBtn = document.getElementById('google-login-btn');
-if (loginBtn) loginBtn.onclick = window.handleLogin;
+if(document.getElementById('google-login-btn'))
+    document.getElementById('google-login-btn').onclick = window.handleLogin;
 
-// --- PROFILE EDITING (FIXED) ---
-window.openProfileModal = () => {
-    const user = auth.currentUser;
-    if(!user) return;
-    document.getElementById('editNameInput').value = user.displayName || "";
-    document.getElementById('editPhotoInput').value = user.photoURL || "";
-    document.getElementById('profile-modal').style.display = 'flex';
-};
-
-window.closeProfileModal = () => {
-    document.getElementById('profile-modal').style.display = 'none';
-};
-
-window.saveProfile = async () => {
-    const name = document.getElementById('editNameInput').value;
-    const photo = document.getElementById('editPhotoInput').value;
-    
-    if(!name) return alert("Name cannot be empty");
-
-    try {
-        // 1. Update Firebase Auth Profile
-        await updateProfile(auth.currentUser, {
-            displayName: name,
-            photoURL: photo
-        });
-        
-        // 2. Update Firestore User Document
-        await setDoc(doc(db, "users", auth.currentUser.uid), { 
-            name: name,
-            photo: photo 
-        }, { merge: true });
-
-        // 3. Force UI Update immediately
-        document.getElementById('usernameDisplay').innerText = name;
-        if(photo) document.getElementById('userPhoto').src = photo;
-
-        window.closeProfileModal();
-        alert("Profile Updated Successfully!");
-    } catch(e) {
-        alert("Error updating profile: " + e.message);
-        console.error(e);
-    }
-};
-
-// --- SETTINGS (THEME & LANG) ---
-async function loadUserSettings() {
-    if (!auth.currentUser) return;
-    try {
-        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
-        if (userDoc.exists()) {
-            const data = userDoc.data();
-            if (data.theme === 'dark') {
-                document.body.setAttribute('data-theme', 'dark');
-                const toggle = document.getElementById('themeToggle');
-                if(toggle) toggle.checked = true;
-            }
-            if (data.lang) {
-                window.changeLanguage(data.lang, false);
-                const langSelect = document.getElementById('langSelect');
-                if(langSelect) langSelect.value = data.lang;
-            }
-            if (data.location) {
-                userLocation = data.location;
-                const coordEl = document.getElementById('currentCoords');
-                if(coordEl) coordEl.innerText = data.location.address;
-            }
+// --- DYNAMIC PRICING ---
+function listenToPrice() {
+    // Listens to the 'products/eggs' document
+    onSnapshot(doc(db, "products", "eggs"), (doc) => {
+        if(doc.exists()) {
+            currentPrice = doc.data().price;
+            document.getElementById('dynamicPrice').innerText = currentPrice;
+        } else {
+            // Initialize if not exists
+            setDoc(doc.ref, { price: 450 });
+            document.getElementById('dynamicPrice').innerText = 450;
         }
-    } catch(e) { console.error(e); }
+    });
 }
 
-window.toggleTheme = async () => {
-    const toggle = document.getElementById('themeToggle');
-    const theme = toggle.checked ? 'dark' : 'light';
-    if (toggle.checked) document.body.setAttribute('data-theme', 'dark');
-    else document.body.removeAttribute('data-theme');
-    if (auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { theme }, { merge: true });
+// --- MAP & LOCATION (LEAFLET) ---
+window.openMapModal = () => {
+    document.getElementById('map-modal').style.display = 'flex';
+    
+    if (!map) {
+        // Init Map centered on Mombasa
+        map = L.map('mapContainer').setView([-4.0435, 39.6682], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Add draggable marker
+        marker = L.marker([-4.0435, 39.6682], {draggable: true}).addTo(map);
+    }
+    
+    // Resize map correctly after modal opens
+    setTimeout(() => { map.invalidateSize(); }, 200);
 };
 
-window.changeLanguage = async (lang, save = true) => {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (translations[lang] && translations[lang][key]) el.innerText = translations[lang][key];
-    });
-    if (save && auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { lang }, { merge: true });
-};
-
-// --- LOCATION SYSTEM (Mombasa & Search) ---
-window.initLocationFlow = function() {
-    const choice = confirm("Use GPS to find your location automatically?\nPress Cancel to search for a Mombasa Area manually.");
-    if (choice) {
-        if (!navigator.geolocation) return window.openLocationSearch();
-        navigator.geolocation.getCurrentPosition(
-            async (pos) => {
-                // In a real app, use Reverse Geocoding API here to get address name
-                // For now we simulate success
-                userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "GPS Location (Mombasa)", timestamp: new Date() };
-                saveLoc();
-                alert("GPS Location set!");
-            }, 
-            () => { alert("GPS failed or denied."); window.openLocationSearch(); }
-        );
-    } else {
-        window.openLocationSearch();
+window.confirmLocation = async () => {
+    const latLng = marker.getLatLng();
+    userLocation = {
+        lat: latLng.lat,
+        lng: latLng.lng,
+        address: `Lat: ${latLng.lat.toFixed(4)}, Lng: ${latLng.lng.toFixed(4)}`
+    };
+    
+    document.getElementById('currentCoords').innerText = "Location Set (Mombasa)";
+    document.getElementById('map-modal').style.display = 'none';
+    
+    if(auth.currentUser) {
+        await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
     }
 };
 
-window.openLocationSearch = () => {
-    const modal = document.getElementById('location-modal');
-    modal.style.display = 'flex';
-    window.renderLocationList(MOMBASA_AREAS);
-};
-
-window.renderLocationList = (areas) => {
-    const list = document.getElementById('locationList');
-    list.innerHTML = '';
-    areas.forEach(area => {
-        const item = document.createElement('div');
-        item.className = 'location-item';
-        item.innerHTML = `<i class="fa-solid fa-map-pin"></i> ${area}, Mombasa`;
-        item.onclick = () => window.selectLocation(area + ", Mombasa");
-        list.appendChild(item);
-    });
-};
-
-window.filterLocations = () => {
-    const query = document.getElementById('locSearch').value.toLowerCase();
-    const filtered = MOMBASA_AREAS.filter(a => a.toLowerCase().includes(query));
-    window.renderLocationList(filtered);
-};
-
-window.selectLocation = (address) => {
-    userLocation = { lat: null, lng: null, address: address, timestamp: new Date() };
-    saveLoc();
-    document.getElementById('location-modal').style.display = 'none';
-};
-
-async function saveLoc() {
-    if(!userLocation) return;
-    document.getElementById('currentCoords').innerText = userLocation.address;
-    if(auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
-}
-
-// --- NOTIFICATIONS PAGE ---
-async function createNotification(msg) {
+async function loadUserLocation() {
     if(!auth.currentUser) return;
-    await addDoc(collection(db, "notifications"), {
-        userId: auth.currentUser.uid,
-        message: msg,
-        read: false,
-        timestamp: new Date()
-    });
+    const docSnap = await getDoc(doc(db, "users", auth.currentUser.uid));
+    if(docSnap.exists() && docSnap.data().location) {
+        userLocation = docSnap.data().location;
+        document.getElementById('currentCoords').innerText = "Location Set";
+    }
 }
 
+// --- ORDERS & MPESA ---
+window.updateQty = (change) => {
+    const display = document.getElementById('shopQty');
+    let val = parseInt(display.innerText) + change;
+    if(val < 30) val = 30; // Min 30
+    display.innerText = val;
+};
+
+window.initiateOrder = async () => {
+    if (!auth.currentUser) return;
+    if (!userLocation) return alert("Please set your location on the map first!");
+    
+    const phone = document.getElementById('mpesaNumber').value;
+    if (!phone || phone.length < 10) return alert("Please enter a valid M-Pesa number.");
+
+    const qty = parseInt(document.getElementById('shopQty').innerText);
+    const total = qty * currentPrice;
+
+    // Simulate STK Push
+    const confirmMsg = `Confirm order:\n${qty} Trays @ Ksh ${currentPrice}\nTotal: Ksh ${total}\n\nPhone: ${phone}\n\nAn M-Pesa prompt will appear on your phone shortly.`;
+    
+    if(confirm(confirmMsg)) {
+        // 1. Save Order
+        try {
+            await addDoc(collection(db, "orders"), {
+                userId: auth.currentUser.uid,
+                userEmail: auth.currentUser.email,
+                userName: auth.currentUser.displayName,
+                item: "Tray of 30 Eggs",
+                quantity: qty,
+                totalPrice: total,
+                phone: phone,
+                status: 'Pending Payment',
+                location: userLocation,
+                createdAt: new Date()
+            });
+
+            // 2. Notification
+            await addDoc(collection(db, "notifications"), {
+                userId: auth.currentUser.uid,
+                message: `Order for ${qty} trays received. Please complete M-Pesa payment.`,
+                timestamp: new Date()
+            });
+
+            alert("Order Placed! Please check your phone for the M-Pesa PIN prompt.");
+            window.showPage('notifications-page');
+            
+        } catch(e) {
+            alert("Error placing order: " + e.message);
+        }
+    }
+};
+
+// --- NOTIFICATIONS ---
 function listenToNotifications() {
     if(!auth.currentUser) return;
+    const q = query(collection(db, "notifications"), where("userId", "==", auth.currentUser.uid));
     
-    // Listen strictly for THIS user's notifications
-    const q = query(
-        collection(db, "notifications"), 
-        where("userId", "==", auth.currentUser.uid)
-    );
-
     onSnapshot(q, (snap) => {
         const list = document.getElementById('fullNotifList');
         const badge = document.getElementById('notifBadge');
-        
-        const notifs = snap.docs.map(d => d.data()).sort((a,b) => b.timestamp - a.timestamp);
-        
-        if (notifs.length > 0) {
-            badge.style.display = 'block';
-            if(list) {
-                list.innerHTML = '';
-                notifs.forEach(n => {
-                    // Calculate time ago
-                    const date = n.timestamp.toDate ? n.timestamp.toDate() : new Date(n.timestamp);
-                    const timeStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-
-                    list.innerHTML += `
-                        <div class="notif-card">
-                            <div class="notif-icon"><i class="fa-solid fa-bell"></i></div>
-                            <div class="notif-content">
-                                <div class="msg">${n.message}</div>
-                                <div class="time">${timeStr}</div>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-        } else {
+        if(snap.empty) {
+            list.innerHTML = '<p class="empty-msg">No notifications.</p>';
             badge.style.display = 'none';
-            if(list) list.innerHTML = '<p class="empty-msg">No notifications yet.</p>';
+        } else {
+            badge.style.display = 'block';
+            list.innerHTML = '';
+            const docs = snap.docs.map(d => d.data()).sort((a,b) => b.timestamp - a.timestamp);
+            docs.forEach(n => {
+                const date = n.timestamp && n.timestamp.toDate ? n.timestamp.toDate().toLocaleString() : '';
+                list.innerHTML += `
+                    <div class="notif-card">
+                        <div class="notif-icon"><i class="fa-solid fa-bell"></i></div>
+                        <div class="notif-content">
+                            <div class="msg">${n.message}</div>
+                            <div class="time">${date}</div>
+                        </div>
+                    </div>`;
+            });
         }
     });
 }
 
-// --- SHOP (Min 30 Logic) ---
-window.updateQty = (change) => {
-    const display = document.getElementById('shopQty');
-    let current = parseInt(display.innerText);
-    let newVal = current + change;
-    if(newVal < 30) newVal = 30; // Enforce Minimum 30
-    display.innerText = newVal;
-};
-
-window.placeOrder = async (item, unitPrice) => {
-    if (!auth.currentUser) return alert("Please login first.");
-    if (!userLocation) {
-        if(confirm("No delivery address! Set one now?")) window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
-        return;
-    }
-
-    const quantity = parseInt(document.getElementById('shopQty').innerText);
-    
-    if(quantity < 30) {
-        alert("Minimum order is 30 Trays.");
-        return;
-    }
-
-    const totalPrice = unitPrice * quantity;
-
-    try {
-        await addDoc(collection(db, "orders"), {
-            userId: auth.currentUser.uid,
-            item, unitPrice, quantity, totalPrice,
-            status: 'Pending',
-            address: userLocation.address,
-            createdAt: new Date()
-        });
-        
-        // Create Notification for the user
-        await createNotification(`Order Placed: ${quantity}x ${item}. Total: Ksh ${totalPrice}`);
-        
-        alert(`Success! Order placed for ${quantity} trays.`);
-        window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
-    } catch(e) {
-        alert("Error: " + e.message);
+// --- PROFILE EDIT ---
+window.openProfileModal = () => document.getElementById('profile-modal').style.display = 'flex';
+window.closeProfileModal = () => document.getElementById('profile-modal').style.display = 'none';
+window.saveProfile = async () => {
+    const name = document.getElementById('editNameInput').value;
+    const photo = document.getElementById('editPhotoInput').value;
+    if(name && auth.currentUser) {
+        try {
+            await updateProfile(auth.currentUser, { displayName: name, photoURL: photo });
+            await setDoc(doc(db, "users", auth.currentUser.uid), { name, photo }, { merge: true });
+            document.getElementById('usernameDisplay').innerText = name;
+            window.closeProfileModal();
+        } catch(e) { alert(e.message); }
     }
 };
-
-function listenToOrders() {
-    if(!auth.currentUser) return;
-    const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
-
-    onSnapshot(q, (snap) => {
-        const countEl = document.getElementById('homeOrderCount');
-        if(countEl) countEl.innerText = snap.size;
-
-        if (!snap.empty) {
-            const docs = snap.docs.map(d => d.data()).sort((a,b) => a.createdAt - b.createdAt);
-            const last = docs[docs.length - 1];
-            const qtyStr = last.quantity ? `${last.quantity}x ` : '1x ';
-            const priceStr = last.totalPrice || last.price; 
-
-            if(document.getElementById('recentItemName')) document.getElementById('recentItemName').innerText = qtyStr + last.item;
-            if(document.getElementById('recentStatusText')) document.getElementById('recentStatusText').innerText = "Status: " + last.status;
-            if(document.getElementById('recentPrice')) document.getElementById('recentPrice').innerText = "Ksh " + priceStr;
-        }
-        renderOrdersList(snap);
-    });
-}
-
-function renderOrdersList(snap) {
-    const list = document.getElementById('ordersList');
-    if(!list) return;
-
-    list.innerHTML = snap.empty ? '<p style="text-align:center;color:#888;margin-top:20px;">No orders yet.</p>' : '';
-    const docs = snap.docs.map(d => d.data()).sort((a,b) => b.createdAt.seconds - a.createdAt.seconds);
-
-    docs.forEach(o => {
-        const qty = o.quantity || 1;
-        const total = o.totalPrice || o.price;
-        list.innerHTML += `
-        <div class="mini-order" style="margin-bottom:10px;">
-            <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
-            <div class="details">
-                <h4>${qty}x ${o.item}</h4>
-                <small>${o.status} &bull; ${o.address}</small>
-            </div>
-            <span class="price">Ksh ${total}</span>
-        </div>`;
-    });
-}
-
-// --- NAV & UI ---
-window.showPage = (id, el) => {
-    document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
-    const target = document.getElementById(id);
-    if(target) { target.style.display = 'block'; setTimeout(() => target.classList.add('active'), 10); }
-    
-    // Update nav icons
-    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    if(el) {
-        el.classList.add('active');
-    } else {
-        // If no element passed (e.g. from bell icon), deactivate all bottom navs
-    }
-};
-
-const heroBtn = document.getElementById('heroOrderBtn');
-if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
+
+window.showPage = (id, el) => {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    if(el) el.classList.add('active');
+};
