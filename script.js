@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
@@ -17,311 +17,349 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// CONFIG
-const ADMINS = ['ashrafsquad001@gmail.com', 'abdulraxmanxamza@gmail.com'];
-const SUPER_ADMIN = 'ashrafsquad001@gmail.com';
-let currentPrice = 450;
 let userLocation = null;
 
-// MOMBASA DATABASE (Formatted for Google Maps Style)
-const MOMBASA_LOCATIONS = [
-    { name: "Mombasa CBD", detail: "Mombasa Island", dist: "1.0 km" },
-    { name: "Nyali Center", detail: "Links Road, Nyali", dist: "3.5 km" },
-    { name: "City Mall", detail: "Malindi Road, Nyali", dist: "4.2 km" },
-    { name: "Bamburi Mtambo", detail: "Bamburi", dist: "7.0 km" },
-    { name: "Mtwapa Mall", detail: "Mtwapa", dist: "12 km" },
-    { name: "Likoni Ferry", detail: "Likoni", dist: "2.5 km" },
-    { name: "Tudor", detail: "Tom Mboya Ave", dist: "2.1 km" },
-    { name: "Kizingo", detail: "Mombasa Island", dist: "1.5 km" },
-    { name: "Changamwe Roundabout", detail: "Airport Road", dist: "6.0 km" },
-    { name: "Moi Int. Airport", detail: "Port Reitz", dist: "9.0 km" },
-    { name: "Ganjoni", detail: "Mombasa", dist: "1.2 km" },
-    { name: "Shanzu", detail: "Serena Road", dist: "10.5 km" }
+// Mombasa Areas Database
+const MOMBASA_AREAS = [
+    "Nyali", "Bamburi", "Tudor", "Kizingo", "Mtwapa", "Likoni", 
+    "Changamwe", "Mikindani", "Ganjoni", "Mombasa Island", "Shanzu", "Mkomani"
 ];
 
-// --- AUTH ---
+const translations = {
+    en: { heroTitle: "Bulk Fresh Eggs", navShop: "Shop", navSettings: "Settings", myOrders: "My Orders", setTheme: "Dark Mode", setLanguage: "Language", logout: "Logout", statOrders: "My Orders", prodTray: "Tray of 30", recentActivity: "Recent Activity" },
+    sw: { heroTitle: "Mayai Kwa Jumla", navShop: "Duka", navSettings: "Mipangilio", myOrders: "Oda Zangu", setTheme: "Giza", setLanguage: "Lugha", logout: "Ondoka", statOrders: "Oda Zangu", prodTray: "Tray ya 30", recentActivity: "Shughuli za Hivi Karibuni" }
+};
+
+// --- AUTH HANDLER ---
 onAuthStateChanged(auth, async (user) => {
     const overlay = document.getElementById('login-overlay');
     if (user) {
         if(overlay) overlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
         
-        // UI Updates
-        document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
-        document.getElementById('userPhoto').src = user.photoURL;
-
-        // Load Data
-        checkAdminAccess(user.email);
-        loadPrice();
-        loadUserLocation();
+        updateUIWithUser(user);
+        await loadUserSettings();
         listenToOrders();
-        listenToNotifications();
+        listenToNotifications(); 
     } else {
         if(overlay) overlay.style.display = 'flex';
         document.body.classList.add('not-logged-in');
     }
 });
 
+function updateUIWithUser(user) {
+    if(document.getElementById('usernameDisplay')) 
+        document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
+    if(document.getElementById('userPhoto') && user.photoURL) 
+        document.getElementById('userPhoto').src = user.photoURL;
+}
+
+window.handleLogin = async () => {
+    try { await signInWithPopup(auth, provider); } 
+    catch (error) { alert("Login Failed: " + error.message); }
+};
 const loginBtn = document.getElementById('google-login-btn');
-if (loginBtn) loginBtn.onclick = async () => {
-    try { await signInWithPopup(auth, provider); } catch (e) { alert(e.message); }
+if (loginBtn) loginBtn.onclick = window.handleLogin;
+
+// --- PROFILE EDITING (FIXED) ---
+window.openProfileModal = () => {
+    const user = auth.currentUser;
+    if(!user) return;
+    document.getElementById('editNameInput').value = user.displayName || "";
+    document.getElementById('editPhotoInput').value = user.photoURL || "";
+    document.getElementById('profile-modal').style.display = 'flex';
 };
 
-window.logoutUser = () => signOut(auth).then(() => location.reload());
-
-// --- ADMIN LOGIC ---
-function checkAdminAccess(email) {
-    if(ADMINS.includes(email)) {
-        document.getElementById('adminBtnContainer').style.display = 'block';
-    }
-    if(email === SUPER_ADMIN) {
-        document.getElementById('adminPriceControl').style.display = 'block';
-    }
-}
-
-window.openAdminPanel = () => {
-    document.getElementById('admin-panel').style.display = 'flex';
-    loadAllOrdersForAdmin();
+window.closeProfileModal = () => {
+    document.getElementById('profile-modal').style.display = 'none';
 };
 
-function loadAllOrdersForAdmin() {
-    // Show all orders sorted by time
-    const q = query(collection(db, "orders")); // In real app, order by date
-    onSnapshot(q, (snap) => {
-        const list = document.getElementById('adminOrderList');
-        list.innerHTML = "";
-        
-        const orders = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.createdAt - a.createdAt);
-        
-        orders.forEach(o => {
-            const date = o.createdAt.toDate ? o.createdAt.toDate().toLocaleDateString() : 'Just now';
-            list.innerHTML += `
-                <div class="admin-order-card">
-                    <div style="display:flex; justify-content:space-between;">
-                        <b>${o.quantity} Trays</b>
-                        <span>Ksh ${o.totalPrice}</span>
-                    </div>
-                    <div style="font-size:12px; color:#666; margin:5px 0;">
-                        User ID: ${o.userId.slice(0,5)}...<br>
-                        Loc: ${o.address}<br>
-                        Phone: ${o.phone || 'N/A'}<br>
-                        ${date}
-                    </div>
-                    <div style="font-size:12px; font-weight:bold; color:${o.status === 'Paid' ? 'green' : 'orange'}">
-                        Status: ${o.status}
-                    </div>
-                </div>
-            `;
-        });
-    });
-}
+window.saveProfile = async () => {
+    const name = document.getElementById('editNameInput').value;
+    const photo = document.getElementById('editPhotoInput').value;
+    
+    if(!name) return alert("Name cannot be empty");
 
-// --- PRICE LOGIC ---
-async function loadPrice() {
     try {
-        const docRef = doc(db, "config", "pricing");
-        const snap = await getDoc(docRef);
-        if(snap.exists()) {
-            currentPrice = snap.data().amount;
-            document.getElementById('displayPrice').innerText = currentPrice;
-            if(auth.currentUser.email === SUPER_ADMIN) {
-                document.getElementById('newPriceInput').value = currentPrice;
+        // 1. Update Firebase Auth Profile
+        await updateProfile(auth.currentUser, {
+            displayName: name,
+            photoURL: photo
+        });
+        
+        // 2. Update Firestore User Document
+        await setDoc(doc(db, "users", auth.currentUser.uid), { 
+            name: name,
+            photo: photo 
+        }, { merge: true });
+
+        // 3. Force UI Update immediately
+        document.getElementById('usernameDisplay').innerText = name;
+        if(photo) document.getElementById('userPhoto').src = photo;
+
+        window.closeProfileModal();
+        alert("Profile Updated Successfully!");
+    } catch(e) {
+        alert("Error updating profile: " + e.message);
+        console.error(e);
+    }
+};
+
+// --- SETTINGS (THEME & LANG) ---
+async function loadUserSettings() {
+    if (!auth.currentUser) return;
+    try {
+        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.theme === 'dark') {
+                document.body.setAttribute('data-theme', 'dark');
+                const toggle = document.getElementById('themeToggle');
+                if(toggle) toggle.checked = true;
+            }
+            if (data.lang) {
+                window.changeLanguage(data.lang, false);
+                const langSelect = document.getElementById('langSelect');
+                if(langSelect) langSelect.value = data.lang;
+            }
+            if (data.location) {
+                userLocation = data.location;
+                const coordEl = document.getElementById('currentCoords');
+                if(coordEl) coordEl.innerText = data.location.address;
             }
         }
-    } catch(e) { console.log("Using default price"); }
+    } catch(e) { console.error(e); }
 }
 
-window.updateGlobalPrice = async () => {
-    const val = parseInt(document.getElementById('newPriceInput').value);
-    if(val > 0) {
-        await setDoc(doc(db, "config", "pricing"), { amount: val });
-        alert("Price updated!");
-        location.reload();
+window.toggleTheme = async () => {
+    const toggle = document.getElementById('themeToggle');
+    const theme = toggle.checked ? 'dark' : 'light';
+    if (toggle.checked) document.body.setAttribute('data-theme', 'dark');
+    else document.body.removeAttribute('data-theme');
+    if (auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { theme }, { merge: true });
+};
+
+window.changeLanguage = async (lang, save = true) => {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang] && translations[lang][key]) el.innerText = translations[lang][key];
+    });
+    if (save && auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { lang }, { merge: true });
+};
+
+// --- LOCATION SYSTEM (Mombasa & Search) ---
+window.initLocationFlow = function() {
+    const choice = confirm("Use GPS to find your location automatically?\nPress Cancel to search for a Mombasa Area manually.");
+    if (choice) {
+        if (!navigator.geolocation) return window.openLocationSearch();
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                // In a real app, use Reverse Geocoding API here to get address name
+                // For now we simulate success
+                userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "GPS Location (Mombasa)", timestamp: new Date() };
+                saveLoc();
+                alert("GPS Location set!");
+            }, 
+            () => { alert("GPS failed or denied."); window.openLocationSearch(); }
+        );
+    } else {
+        window.openLocationSearch();
     }
 };
 
-// --- LOCATION (Google Maps Style) ---
-window.initLocationFlow = () => {
-    document.getElementById('location-modal').style.display = 'flex';
-    window.renderLocationList(MOMBASA_LOCATIONS);
+window.openLocationSearch = () => {
+    const modal = document.getElementById('location-modal');
+    modal.style.display = 'flex';
+    window.renderLocationList(MOMBASA_AREAS);
 };
 
-window.renderLocationList = (locations) => {
+window.renderLocationList = (areas) => {
     const list = document.getElementById('locationList');
     list.innerHTML = '';
-    locations.forEach(loc => {
-        list.innerHTML += `
-            <div class="map-item" onclick="window.selectLocation('${loc.name}, ${loc.detail}')">
-                <div class="map-icon"><i class="fa-solid fa-location-dot"></i></div>
-                <div class="map-text">
-                    <div class="map-name">${loc.name}</div>
-                    <div class="map-detail">${loc.detail}</div>
-                </div>
-                <div class="map-dist">${loc.dist}</div>
-            </div>
-        `;
+    areas.forEach(area => {
+        const item = document.createElement('div');
+        item.className = 'location-item';
+        item.innerHTML = `<i class="fa-solid fa-map-pin"></i> ${area}, Mombasa`;
+        item.onclick = () => window.selectLocation(area + ", Mombasa");
+        list.appendChild(item);
     });
 };
 
 window.filterLocations = () => {
-    const q = document.getElementById('locSearch').value.toLowerCase();
-    const filtered = MOMBASA_LOCATIONS.filter(l => 
-        l.name.toLowerCase().includes(q) || l.detail.toLowerCase().includes(q)
-    );
+    const query = document.getElementById('locSearch').value.toLowerCase();
+    const filtered = MOMBASA_AREAS.filter(a => a.toLowerCase().includes(query));
     window.renderLocationList(filtered);
 };
 
-window.selectLocation = async (addr) => {
-    userLocation = addr;
-    document.getElementById('currentCoords').innerText = addr;
+window.selectLocation = (address) => {
+    userLocation = { lat: null, lng: null, address: address, timestamp: new Date() };
+    saveLoc();
     document.getElementById('location-modal').style.display = 'none';
-    if(auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { location: addr }, { merge: true });
 };
 
-async function loadUserLocation() {
-    const d = await getDoc(doc(db, "users", auth.currentUser.uid));
-    if(d.exists() && d.data().location) {
-        userLocation = d.data().location;
-        document.getElementById('currentCoords').innerText = userLocation;
-    }
+async function saveLoc() {
+    if(!userLocation) return;
+    document.getElementById('currentCoords').innerText = userLocation.address;
+    if(auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
 }
 
-// --- SHOP & M-PESA ---
-window.updateQty = (n) => {
-    const el = document.getElementById('shopQty');
-    let v = parseInt(el.innerText) + n;
-    if(v < 30) v = 30;
-    el.innerText = v;
-};
-
-window.initiateOrder = () => {
-    if(!userLocation) {
-        alert("Please set your location first.");
-        return window.initLocationFlow();
-    }
-    const qty = parseInt(document.getElementById('shopQty').innerText);
-    const total = qty * currentPrice;
-
-    // Show M-Pesa Modal
-    document.getElementById('mpesaAmount').innerText = total;
-    document.getElementById('mpesa-modal').style.display = 'flex';
-};
-
-window.startMpesaProcess = async () => {
-    const phone = document.getElementById('mpesaPhone').value;
-    if(phone.length < 10) return alert("Enter valid M-Pesa number");
-
-    const btn = document.querySelector('.mpesa-btn');
-    btn.innerText = "Processing STK Push...";
-    btn.disabled = true;
-
-    // SIMULATION OF STK PUSH (Since we have no backend)
-    setTimeout(async () => {
-        const qty = parseInt(document.getElementById('shopQty').innerText);
-        const total = qty * currentPrice;
-
-        try {
-            await addDoc(collection(db, "orders"), {
-                userId: auth.currentUser.uid,
-                item: "Tray of 30",
-                quantity: qty,
-                totalPrice: total,
-                status: "Paid",
-                address: userLocation,
-                phone: phone,
-                createdAt: new Date()
-            });
-
-            // Create Notification
-            await addDoc(collection(db, "notifications"), {
-                userId: auth.currentUser.uid,
-                message: `Order Confirmed: ${qty} Trays to ${userLocation}`,
-                read: false,
-                timestamp: new Date()
-            });
-
-            alert("Payment Successful! Order Placed.");
-            document.getElementById('mpesa-modal').style.display = 'none';
-            btn.innerText = "Pay Now";
-            btn.disabled = false;
-            window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
-
-        } catch(e) {
-            alert("Error: " + e.message);
-            btn.disabled = false;
-        }
-    }, 3000); // 3 second delay to simulate phone pin prompt
-};
-
-
-// --- NOTIFICATIONS (Dropdown Logic) ---
-window.toggleNotifDropdown = () => {
-    const d = document.getElementById('notifDropdown');
-    d.style.display = d.style.display === 'block' ? 'none' : 'block';
-};
+// --- NOTIFICATIONS PAGE ---
+async function createNotification(msg) {
+    if(!auth.currentUser) return;
+    await addDoc(collection(db, "notifications"), {
+        userId: auth.currentUser.uid,
+        message: msg,
+        read: false,
+        timestamp: new Date()
+    });
+}
 
 function listenToNotifications() {
     if(!auth.currentUser) return;
-    const q = query(collection(db, "notifications"), where("userId", "==", auth.currentUser.uid));
     
+    // Listen strictly for THIS user's notifications
+    const q = query(
+        collection(db, "notifications"), 
+        where("userId", "==", auth.currentUser.uid)
+    );
+
     onSnapshot(q, (snap) => {
-        const list = document.getElementById('notifList');
+        const list = document.getElementById('fullNotifList');
         const badge = document.getElementById('notifBadge');
         
-        if(snap.empty) {
-            badge.style.display = 'none';
-            list.innerHTML = '<p class="empty-msg">No new notifications</p>';
-        } else {
+        const notifs = snap.docs.map(d => d.data()).sort((a,b) => b.timestamp - a.timestamp);
+        
+        if (notifs.length > 0) {
             badge.style.display = 'block';
-            list.innerHTML = '';
-            const docs = snap.docs.map(d => d.data()).sort((a,b) => b.timestamp - a.timestamp);
-            
-            docs.forEach(n => {
-                list.innerHTML += `
-                    <div class="notif-item">
-                        <i class="fa-solid fa-circle-info"></i>
-                        <div>${n.message}</div>
-                    </div>
-                `;
-            });
+            if(list) {
+                list.innerHTML = '';
+                notifs.forEach(n => {
+                    // Calculate time ago
+                    const date = n.timestamp.toDate ? n.timestamp.toDate() : new Date(n.timestamp);
+                    const timeStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+
+                    list.innerHTML += `
+                        <div class="notif-card">
+                            <div class="notif-icon"><i class="fa-solid fa-bell"></i></div>
+                            <div class="notif-content">
+                                <div class="msg">${n.message}</div>
+                                <div class="time">${timeStr}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        } else {
+            badge.style.display = 'none';
+            if(list) list.innerHTML = '<p class="empty-msg">No notifications yet.</p>';
         }
     });
 }
 
-// --- ORDERS LIST ---
+// --- SHOP (Min 30 Logic) ---
+window.updateQty = (change) => {
+    const display = document.getElementById('shopQty');
+    let current = parseInt(display.innerText);
+    let newVal = current + change;
+    if(newVal < 30) newVal = 30; // Enforce Minimum 30
+    display.innerText = newVal;
+};
+
+window.placeOrder = async (item, unitPrice) => {
+    if (!auth.currentUser) return alert("Please login first.");
+    if (!userLocation) {
+        if(confirm("No delivery address! Set one now?")) window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
+        return;
+    }
+
+    const quantity = parseInt(document.getElementById('shopQty').innerText);
+    
+    if(quantity < 30) {
+        alert("Minimum order is 30 Trays.");
+        return;
+    }
+
+    const totalPrice = unitPrice * quantity;
+
+    try {
+        await addDoc(collection(db, "orders"), {
+            userId: auth.currentUser.uid,
+            item, unitPrice, quantity, totalPrice,
+            status: 'Pending',
+            address: userLocation.address,
+            createdAt: new Date()
+        });
+        
+        // Create Notification for the user
+        await createNotification(`Order Placed: ${quantity}x ${item}. Total: Ksh ${totalPrice}`);
+        
+        alert(`Success! Order placed for ${quantity} trays.`);
+        window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
+    } catch(e) {
+        alert("Error: " + e.message);
+    }
+};
+
 function listenToOrders() {
     if(!auth.currentUser) return;
     const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
+
     onSnapshot(q, (snap) => {
-        const list = document.getElementById('ordersList');
-        document.getElementById('homeOrderCount').innerText = snap.size;
-        
-        list.innerHTML = snap.empty ? '<p style="text-align:center; padding:20px; color:#999;">No orders yet.</p>' : '';
-        
-        snap.docs.forEach(d => {
-            const o = d.data();
-            list.innerHTML += `
-                <div class="mini-order">
-                    <div class="icon-box"><i class="fa-solid fa-check"></i></div>
-                    <div class="details">
-                        <h4>${o.quantity}x Trays</h4>
-                        <small>${o.status} &bull; ${o.address}</small>
-                    </div>
-                    <span class="price">Ksh ${o.totalPrice}</span>
-                </div>
-            `;
-        });
+        const countEl = document.getElementById('homeOrderCount');
+        if(countEl) countEl.innerText = snap.size;
+
+        if (!snap.empty) {
+            const docs = snap.docs.map(d => d.data()).sort((a,b) => a.createdAt - b.createdAt);
+            const last = docs[docs.length - 1];
+            const qtyStr = last.quantity ? `${last.quantity}x ` : '1x ';
+            const priceStr = last.totalPrice || last.price; 
+
+            if(document.getElementById('recentItemName')) document.getElementById('recentItemName').innerText = qtyStr + last.item;
+            if(document.getElementById('recentStatusText')) document.getElementById('recentStatusText').innerText = "Status: " + last.status;
+            if(document.getElementById('recentPrice')) document.getElementById('recentPrice').innerText = "Ksh " + priceStr;
+        }
+        renderOrdersList(snap);
     });
 }
 
-// --- NAVIGATION ---
+function renderOrdersList(snap) {
+    const list = document.getElementById('ordersList');
+    if(!list) return;
+
+    list.innerHTML = snap.empty ? '<p style="text-align:center;color:#888;margin-top:20px;">No orders yet.</p>' : '';
+    const docs = snap.docs.map(d => d.data()).sort((a,b) => b.createdAt.seconds - a.createdAt.seconds);
+
+    docs.forEach(o => {
+        const qty = o.quantity || 1;
+        const total = o.totalPrice || o.price;
+        list.innerHTML += `
+        <div class="mini-order" style="margin-bottom:10px;">
+            <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
+            <div class="details">
+                <h4>${qty}x ${o.item}</h4>
+                <small>${o.status} &bull; ${o.address}</small>
+            </div>
+            <span class="price">Ksh ${total}</span>
+        </div>`;
+    });
+}
+
+// --- NAV & UI ---
 window.showPage = (id, el) => {
     document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
-    const t = document.getElementById(id);
-    if(t) { t.style.display = 'block'; setTimeout(() => t.classList.add('active'), 10); }
+    const target = document.getElementById(id);
+    if(target) { target.style.display = 'block'; setTimeout(() => target.classList.add('active'), 10); }
     
+    // Update nav icons
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    if(el) el.classList.add('active');
+    if(el) {
+        el.classList.add('active');
+    } else {
+        // If no element passed (e.g. from bell icon), deactivate all bottom navs
+    }
 };
-const hBtn = document.getElementById('heroOrderBtn');
-if(hBtn) hBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
+
+const heroBtn = document.getElementById('heroOrderBtn');
+if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
+
+window.logoutUser = () => signOut(auth).then(() => location.reload());
