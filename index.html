@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EggMaster Wholesale</title>
+    <title>EggMaster Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -16,7 +16,7 @@
     <div id="login-overlay" class="login-screen">
         <div class="login-content">
             <h1>EggMaster<span class="dot">.</span></h1>
-            <p>Wholesale Supply (Min 30 Trays)</p>
+            <p>Farm fresh goodness (Min 30 Trays)</p>
             <button id="google-login-btn" class="google-btn">
                 <i class="fa-brands fa-google"></i> Continue with Google
             </button>
@@ -24,20 +24,23 @@
     </div>
 
     <div id="map-modal" class="modal-overlay">
-        <div class="modal-content map-content">
-            <h3>Set Exact Location</h3>
-            <p>Drag the pin to your delivery spot in Mombasa.</p>
-            <div id="mapContainer"></div>
-            <button class="save-btn" onclick="window.confirmLocation()" style="width:100%; margin-top:10px;">Confirm Location</button>
-            <button class="cancel-btn" onclick="document.getElementById('map-modal').style.display='none'" style="width:100%; margin-top:5px;">Cancel</button>
+        <div class="modal-content" style="max-width: 90%; height: 80vh; display: flex; flex-direction: column;">
+            <h3>Select Delivery Location</h3>
+            <div class="search-bar" style="display:flex; gap:5px; margin-bottom:10px;">
+                <input type="text" id="mapSearchInput" placeholder="Search area (e.g. Bamburi)" style="flex:1; padding:10px; border-radius:8px; border:1px solid #ddd;">
+                <button onclick="window.searchMap()" style="padding:10px; background:var(--primary); border:none; border-radius:8px;">Search</button>
+            </div>
+            <div id="mapContainer" style="flex:1; border-radius:12px;"></div>
+            <button class="save-btn" onclick="window.confirmLocation()" style="width:100%; margin-top:10px; padding:15px;">Confirm Location</button>
+            <button class="cancel-btn" onclick="document.getElementById('map-modal').style.display='none'" style="width:100%; margin-top:5px;">Close</button>
         </div>
     </div>
 
     <div id="profile-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Edit Profile</h3>
-            <input type="text" id="editNameInput" placeholder="Enter your name" class="modal-input">
-            <input type="text" id="editPhotoInput" placeholder="Photo URL" class="modal-input">
+            <input type="text" id="editNameInput" placeholder="Name" style="width:100%; padding:10px; margin-bottom:10px;">
+            <input type="text" id="editPhotoInput" placeholder="Photo URL" style="width:100%; padding:10px; margin-bottom:10px;">
             <div class="modal-actions">
                 <button class="cancel-btn" onclick="window.closeProfileModal()">Cancel</button>
                 <button class="save-btn" onclick="window.saveProfile()">Save</button>
@@ -45,90 +48,96 @@
         </div>
     </div>
 
-    <a href="https://wa.me/254745862002" target="_blank" class="whatsapp-float">
-        <i class="fa-brands fa-whatsapp"></i>
-    </a>
+    <a href="https://wa.me/254745862002" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
 
     <header class="top-bar">
         <div class="user-info">
-            <small>Welcome,</small>
-            <h3 id="usernameDisplay">Wholesaler</h3>
+            <small id="welcome-text">Good Morning,</small>
+            <h3 id="usernameDisplay">User</h3>
         </div>
         <div class="header-actions">
-            <a href="admin.html" id="adminLink" style="display:none;" class="icon-btn" title="Admin Panel">
-                <i class="fa-solid fa-lock"></i>
-            </a>
+            <button id="adminBtn" onclick="window.location.href='admin.html'" class="icon-btn" style="display:none; color: red; border-color: red;">
+                <i class="fa-solid fa-user-shield"></i>
+            </button>
             
-            <div class="icon-btn" onclick="window.showPage('notifications-page', null)">
+            <div class="icon-btn" onclick="window.showPage('notifications-page')">
                 <i class="fa-regular fa-bell"></i>
                 <div id="notifBadge" class="dot-badge" style="display:none;"></div>
             </div>
-            <div class="profile-pic">
-                <img src="https://ui-avatars.com/api/?name=User&background=FFB300&color=fff" id="userPhoto" alt="User">
-            </div>
+            <div class="profile-pic"><img src="" id="userPhoto" alt="User"></div>
         </div>
     </header>
 
-    <section id="shop" class="page active">
-        <h2 class="page-title">Wholesale Shop</h2>
-        <div class="product-grid"> 
-            <div class="product-card">
-                <div class="prod-img-wrapper"><div class="prod-emoji">🥚</div></div>
-                <div class="prod-details">
-                    <h3>Tray of 30</h3>
-                    <div class="prod-desc">Fresh Kienyeji Eggs</div>
-                    <div class="price-row"><span>Ksh</span> <span id="dynamicPrice">...</span></div>
-                    
-                    <div class="action-row">
-                        <div class="qty-control">
-                            <button onclick="updateQty(-1)">-</button>
-                            <span class="qty-display" id="shopQty">30</span>
-                            <button onclick="updateQty(1)">+</button>
-                        </div>
-                    </div>
-
-                    <div class="mpesa-section">
-                        <label>M-Pesa Number (for payment)</label>
-                        <input type="tel" id="mpesaNumber" placeholder="0712345678" value="">
-                    </div>
-
-                    <button class="add-btn" onclick="window.initiateOrder()">
-                        <i class="fa-solid fa-check"></i> Order & Pay
-                    </button>
-                </div>
+    <section id="home" class="page active">
+        <div class="hero-card">
+            <div class="hero-text">
+                <span class="tag">Wholesale</span>
+                <h2 data-i18n="heroTitle">Bulk Fresh Eggs</h2>
+                <button onclick="window.showPage('shop')">Order Now</button>
+            </div>
+            <div class="hero-img">🥚</div>
+        </div>
+        <div class="stats-row">
+            <div class="stat-card highlight">
+                <i class="fa-solid fa-basket-shopping"></i>
+                <div><b id="homeOrderCount">0</b><span data-i18n="statOrders">My Orders</span></div>
             </div>
         </div>
+    </section>
+
+    <section id="shop" class="page">
+        <h2 class="page-title" data-i18n="navShop">Shop</h2>
+        <div class="product-card" style="margin: 0 24px;">
+            <h3>Tray of 30</h3>
+            <div class="price-row">Ksh <span id="dynamicPrice">450</span></div>
+            <div class="qty-control" style="margin: 15px 0;">
+                <button onclick="updateQty(-1)">-</button>
+                <span id="shopQty">30</span>
+                <button onclick="updateQty(1)">+</button>
+            </div>
+            <input type="tel" id="mpesaNumber" placeholder="M-Pesa Number" style="width:100%; padding:12px; margin-bottom:10px; border-radius:8px; border:1px solid #ddd;">
+            <button class="add-btn" onclick="window.placeOrder()" style="width:100%;">Buy Now & Pay</button>
+        </div>
+    </section>
+
+    <section id="orders" class="page">
+        <h2 class="page-title" data-i18n="myOrders">My Orders</h2>
+        <div id="ordersList"></div>
     </section>
 
     <section id="notifications-page" class="page">
         <h2 class="page-title">Notifications</h2>
-        <div id="fullNotifList" class="notif-page-list">
-            <p class="empty-msg">Loading...</p>
-        </div>
+        <div id="fullNotifList"></div>
     </section>
 
     <section id="settings" class="page">
-        <h2 class="page-title">Settings</h2>
+        <h2 class="page-title" data-i18n="navSettings">Settings</h2>
         <div class="settings-section">
-            <div class="setting-item clickable" onclick="window.openProfileModal()">
-                <div class="icon-wrap color-blue"><i class="fa-solid fa-user-pen"></i></div>
-                <div class="text">Edit Profile</div>
-            </div>
+            <div class="setting-item clickable" onclick="window.openProfileModal()">Edit Profile</div>
             <div class="setting-item clickable" onclick="window.openMapModal()">
-                <div class="icon-wrap color-green"><i class="fa-solid fa-location-dot"></i></div>
-                <div class="text">
-                    <div>Delivery Location</div>
-                    <small id="currentCoords">Set on Map</small>
-                </div>
+                Set Delivery Location <br> <small id="currentCoords" style="color:var(--primary);">Not Set</small>
+            </div>
+            <div class="setting-item">
+                <span data-i18n="setTheme">Dark Mode</span>
+                <input type="checkbox" id="themeToggle" onchange="window.toggleTheme()">
+            </div>
+            <div class="setting-item">
+                <span data-i18n="setLanguage">Language</span>
+                <select id="langSelect" onchange="window.changeLanguage(this.value)">
+                    <option value="en">English</option>
+                    <option value="sw">Kiswahili</option>
+                </select>
             </div>
         </div>
         <button class="logout-btn" onclick="window.logoutUser()">Logout</button>
     </section>
 
     <nav class="bottom-nav">
-        <div class="nav-item active" onclick="window.showPage('shop', this)"><i class="fa-solid fa-bag-shopping"></i></div>
-        <div class="nav-item" onclick="window.showPage('notifications-page', this)"><i class="fa-solid fa-bell"></i></div>
+        <div class="nav-item active" onclick="window.showPage('home', this)"><i class="fa-solid fa-house"></i></div>
+        <div class="nav-item" onclick="window.showPage('shop', this)"><i class="fa-solid fa-bag-shopping"></i></div>
+        <div class="nav-item" onclick="window.showPage('orders', this)"><i class="fa-solid fa-receipt"></i></div>
         <div class="nav-item" onclick="window.showPage('settings', this)"><i class="fa-solid fa-sliders"></i></div>
     </nav>
+
 </body>
 </html>
