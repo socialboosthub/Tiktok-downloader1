@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EggMaster Pro</title>
+    <title>EggMaster Wholesale</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
@@ -22,7 +22,7 @@
                 <div class="yolk-glow"></div>
             </div>
             <h1>EggMaster<span class="dot">.</span></h1>
-            <p>Farm fresh goodness, delivered daily.</p>
+            <p>Wholesale Supply (Min 30 Trays)</p>
             <div class="login-actions">
                 <button id="google-login-btn" class="google-btn">
                     <i class="fa-brands fa-google"></i>
@@ -50,22 +50,32 @@
         </div>
     </div>
 
+    <div id="location-modal" class="modal-overlay">
+        <div class="modal-content location-content">
+            <h3>Select Delivery Location</h3>
+            <p style="font-size:12px; color:#666; margin-bottom:15px;">We deliver within Mombasa County.</p>
+            
+            <div class="search-bar">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="locSearch" placeholder="Search area (e.g. Nyali, Bamburi...)" onkeyup="window.filterLocations()">
+            </div>
+
+            <div id="locationList" class="location-list">
+                </div>
+            
+            <button class="cancel-btn" style="width:100%; margin-top:10px;" onclick="document.getElementById('location-modal').style.display='none'">Close</button>
+        </div>
+    </div>
+
     <header class="top-bar">
         <div class="user-info">
             <small id="welcome-text">Good Morning,</small>
-            <h3 id="usernameDisplay">Egg Lover 🥚</h3>
+            <h3 id="usernameDisplay">Egg Wholesaler</h3>
         </div>
         <div class="header-actions">
-            <div class="icon-btn" onclick="window.toggleNotifications()">
+            <div class="icon-btn" onclick="window.showPage('notifications-page', null)">
                 <i class="fa-regular fa-bell"></i>
                 <div id="notifBadge" class="dot-badge" style="display:none;"></div>
-                
-                <div id="notifPanel" class="notification-panel">
-                    <div class="notif-header">Notifications</div>
-                    <div id="notifList" class="notif-list">
-                        <p class="empty-msg">No notifications.</p>
-                    </div>
-                </div>
             </div>
 
             <div class="profile-pic">
@@ -77,22 +87,22 @@
     <section id="home" class="page active">
         <div class="hero-card">
             <div class="hero-text">
-                <span class="tag">Free Delivery</span>
-                <h2 data-i18n="heroTitle">Kienyeji Specials</h2>
+                <span class="tag">Wholesale Only</span>
+                <h2 data-i18n="heroTitle">Bulk Fresh Eggs</h2>
                 <button id="heroOrderBtn">Order Now <i class="fa-solid fa-arrow-right"></i></button>
             </div>
             <div class="hero-img">🐓</div>
         </div>
 
         <div class="stats-row">
-            <div class="stat-card highlight" style="flex: 1;">
+            <div class="stat-card highlight">
                 <i class="fa-solid fa-basket-shopping"></i>
                 <div>
                     <b id="homeOrderCount">0</b>
-                    <span data-i18n="statOrders">Total Orders</span>
+                    <span data-i18n="statOrders">My Orders</span>
                 </div>
             </div>
-            </div>
+        </div>
 
         <div class="section-header">
             <h3 data-i18n="recentActivity">Recent Activity</h3>
@@ -108,31 +118,44 @@
     </section>
 
     <section id="shop" class="page">
-        <h2 class="page-title" data-i18n="navShop">Shop</h2>
-        <div class="product-grid" style="grid-template-columns: 1fr;"> <div class="product-card">
+        <h2 class="page-title" data-i18n="navShop">Wholesale Shop</h2>
+        <div class="product-grid" style="grid-template-columns: 1fr;"> 
+            <div class="product-card">
                 <div class="prod-img-wrapper"><div class="prod-emoji">🥚</div></div>
                 <div class="prod-details">
                     <h3 data-i18n="prodTray">Tray of 30</h3>
                     <div class="prod-desc">Fresh Kienyeji Eggs (Yellow Yolk)</div>
-                    <div class="price-row"><span>Ksh</span> 450</div>
+                    <div class="price-row"><span>Ksh</span> 450 <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
+                    
+                    <div class="warning-box" style="background:#fff3cd; color:#856404; padding:8px; border-radius:8px; font-size:11px; margin-bottom:10px;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Minimum Order: 30 Trays
+                    </div>
+
                     <div class="action-row">
                         <div class="qty-control">
-                            <button>-</button>
-                            <span class="qty-display">1</span>
-                            <button>+</button>
+                            <button onclick="updateQty(-1)">-</button>
+                            <span class="qty-display" id="shopQty">30</span>
+                            <button onclick="updateQty(1)">+</button>
                         </div>
-                        <button class="add-btn" onclick="window.placeOrder('Tray of 30', 450, this)">
-                            <i class="fa-solid fa-plus"></i> Add to Cart
+                        <button class="add-btn" onclick="window.placeOrder('Tray of 30', 450)">
+                            <i class="fa-solid fa-plus"></i> Buy Now
                         </button>
                     </div>
                 </div>
             </div>
-            </div>
+        </div>
     </section>
 
     <section id="orders" class="page">
         <h2 class="page-title" data-i18n="myOrders">My Orders</h2>
         <div id="ordersList" class="orders-list"></div>
+    </section>
+
+    <section id="notifications-page" class="page">
+        <h2 class="page-title">Notifications</h2>
+        <div id="fullNotifList" class="notif-page-list">
+            <p class="empty-msg">Loading notifications...</p>
+        </div>
     </section>
 
     <section id="settings" class="page">
@@ -145,7 +168,7 @@
                 <div class="text">Edit Profile</div>
                 <i class="fa-solid fa-chevron-right arrow"></i>
             </div>
-            <div class="setting-item clickable" onclick="window.updateLocation()">
+            <div class="setting-item clickable" onclick="window.initLocationFlow()">
                 <div class="icon-wrap color-green"><i class="fa-solid fa-location-dot"></i></div>
                 <div class="text">
                     <div id="locationStatus">Delivery Address</div>
@@ -157,14 +180,6 @@
 
         <div class="settings-section">
             <div class="settings-header">App Preferences</div>
-            <div class="setting-item">
-                <div class="icon-wrap color-purple"><i class="fa-solid fa-bell"></i></div>
-                <div class="text">Notifications</div>
-                <label class="switch">
-                    <input type="checkbox" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
             <div class="setting-item">
                 <div class="icon-wrap color-orange"><i class="fa-solid fa-moon"></i></div>
                 <div class="text" data-i18n="setTheme">Dark Mode</div>
