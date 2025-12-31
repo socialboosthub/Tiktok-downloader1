@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { padding: 20px; background: #f0f2f5; }
+        .admin-card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; font-size: 14px; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #fff3cd; color: #856404; }
+        .map-btn { background: #E3F2FD; color: #2196F3; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; text-decoration: none;}
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
+            authDomain: "eggshop-702f6.firebaseapp.com",
+            projectId: "eggshop-702f6",
+            storageBucket: "eggshop-702f6.firebasestorage.app",
+            messagingSenderId: "290586261198",
+            appId: "1:290586261198:web:61cd80463c8c2c5f06429f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const ADMINS = ["ashrafsquad001@gmail.com", "abdulraxmanxamza@gmail.com"];
+
+        onAuthStateChanged(auth, user => {
+            if (!user || !ADMINS.includes(user.email)) {
+                alert("Access Denied");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // Only Ashraf can see price editor
+            if(user.email === "ashrafsquad001@gmail.com") {
+                document.getElementById('priceEditor').style.display = 'block';
+            }
+
+            loadOrders();
+        });
+
+        function loadOrders() {
+            const q = query(collection(db, "orders"));
+            onSnapshot(q, (snap) => {
+                const tbody = document.getElementById('ordersBody');
+                tbody.innerHTML = '';
+                const orders = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.createdAt - a.createdAt);
+                
+                orders.forEach(order => {
+                    const lat = order.location?.lat;
+                    const lng = order.location?.lng;
+                    const mapLink = lat ? `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="map-btn">View Map</a>` : 'No Loc';
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${order.userName}<br><small>${order.phone}</small></td>
+                            <td>${order.quantity} Trays</td>
+                            <td>Ksh ${order.totalPrice}</td>
+                            <td>${mapLink}</td>
+                            <td><span class="status-badge">${order.status}</span></td>
+                        </tr>
+                    `;
+                });
+            });
+        }
+
+        window.updatePrice = async () => {
+            const newPrice = Number(document.getElementById('priceInput').value);
+            if(newPrice > 0) {
+                await updateDoc(doc(db, "products", "eggs"), { price: newPrice });
+                alert("Price updated!");
+            }
+        };
+    </script>
+</head>
+<body>
+    <h2>Admin Dashboard</h2>
+    <a href="index.html" style="margin-bottom:20px; display:inline-block;">&larr; Back to Shop</a>
+
+    <div id="priceEditor" class="admin-card" style="display:none;">
+        <h3>Update Price</h3>
+        <input type="number" id="priceInput" placeholder="New Price per Tray">
+        <button onclick="window.updatePrice()" style="background:#FFB300; border:none; padding:10px; border-radius:5px; cursor:pointer;">Update</button>
+    </div>
+
+    <div class="admin-card">
+        <h3>Recent Orders</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Qty</th>
+                    <th>Total</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="ordersBody">
+                </tbody>
+        </table>
+    </div>
+</body>
+</html>
