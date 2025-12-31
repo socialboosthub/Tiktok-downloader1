@@ -32,6 +32,33 @@
         </div>
     </div>
 
+    <div id="mpesa-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div style="text-align:center; margin-bottom:15px;">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" style="height:40px;" alt="M-Pesa">
+            </div>
+            <h3>Complete Payment</h3>
+            <p style="font-size:13px; color:#666; text-align:center;">Enter your M-Pesa number to receive the payment prompt.</p>
+            
+            <div class="input-group">
+                <label>Phone Number</label>
+                <input type="tel" id="mpesaNumber" placeholder="0712 345 678" maxlength="10">
+            </div>
+            
+            <div class="summary-box" style="background:#f0fcf4; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #c3e6cb;">
+                <div style="display:flex; justify-content:space-between; font-size:13px;">
+                    <span>Total Amount:</span>
+                    <strong style="color:#2d6a4f">Ksh <span id="mpesaTotalDisplay">0</span></strong>
+                </div>
+            </div>
+
+            <button id="payBtn" class="save-btn" style="width:100%; background:#4CAF50; color:white;" onclick="window.triggerMpesa()">
+                Pay Now
+            </button>
+            <button class="cancel-btn" style="width:100%; margin-top:10px;" onclick="document.getElementById('mpesa-modal').style.display='none'">Cancel</button>
+        </div>
+    </div>
+
     <div id="profile-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Edit Profile</h3>
@@ -54,15 +81,11 @@
         <div class="modal-content location-content">
             <h3>Select Delivery Location</h3>
             <p style="font-size:12px; color:#666; margin-bottom:15px;">We deliver within Mombasa County.</p>
-            
             <div class="search-bar">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="locSearch" placeholder="Search area (e.g. Nyali, Bamburi...)" onkeyup="window.filterLocations()">
+                <input type="text" id="locSearch" placeholder="Search area..." onkeyup="window.filterLocations()">
             </div>
-
-            <div id="locationList" class="location-list">
-                </div>
-            
+            <div id="locationList" class="location-list"></div>
             <button class="cancel-btn" style="width:100%; margin-top:10px;" onclick="document.getElementById('location-modal').style.display='none'">Close</button>
         </div>
     </div>
@@ -77,7 +100,6 @@
                 <i class="fa-regular fa-bell"></i>
                 <div id="notifBadge" class="dot-badge" style="display:none;"></div>
             </div>
-
             <div class="profile-pic">
                 <img src="https://ui-avatars.com/api/?name=User&background=FFB300&color=fff" id="userPhoto" alt="User">
             </div>
@@ -93,7 +115,6 @@
             </div>
             <div class="hero-img">🐓</div>
         </div>
-
         <div class="stats-row">
             <div class="stat-card highlight">
                 <i class="fa-solid fa-basket-shopping"></i>
@@ -103,7 +124,6 @@
                 </div>
             </div>
         </div>
-
         <div class="section-header">
             <h3 data-i18n="recentActivity">Recent Activity</h3>
         </div>
@@ -125,7 +145,7 @@
                 <div class="prod-details">
                     <h3 data-i18n="prodTray">Tray of 30</h3>
                     <div class="prod-desc">Fresh Kienyeji Eggs (Yellow Yolk)</div>
-                    <div class="price-row"><span>Ksh</span> 450 <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
+                    <div class="price-row"><span>Ksh</span> <span id="dynamicPriceDisplay">...</span> <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
                     
                     <div class="warning-box" style="background:#fff3cd; color:#856404; padding:8px; border-radius:8px; font-size:11px; margin-bottom:10px;">
                         <i class="fa-solid fa-triangle-exclamation"></i> Minimum Order: 30 Trays
@@ -137,8 +157,8 @@
                             <span class="qty-display" id="shopQty">30</span>
                             <button onclick="updateQty(1)">+</button>
                         </div>
-                        <button class="add-btn" onclick="window.placeOrder('Tray of 30', 450)">
-                            <i class="fa-solid fa-plus"></i> Buy Now
+                        <button class="add-btn" onclick="window.initiateOrder()">
+                            <i class="fa-solid fa-cart-plus"></i> Buy Now
                         </button>
                     </div>
                 </div>
@@ -160,7 +180,6 @@
 
     <section id="settings" class="page">
         <h2 class="page-title" data-i18n="navSettings">Settings</h2>
-        
         <div class="settings-section">
             <div class="settings-header">Account</div>
             <div class="setting-item clickable" onclick="window.openProfileModal()">
@@ -177,7 +196,6 @@
                 <i class="fa-solid fa-chevron-right arrow"></i>
             </div>
         </div>
-
         <div class="settings-section">
             <div class="settings-header">App Preferences</div>
             <div class="setting-item">
@@ -197,9 +215,12 @@
                 </select>
             </div>
         </div>
-
         <button class="logout-btn" onclick="window.logoutUser()" data-i18n="logout" style="width: calc(100% - 48px); margin: 24px; padding: 15px; border-radius: 12px; border: none; background: #FFEBEE; color: #F44336; font-weight: 700;">Logout</button>
     </section>
+
+    <a href="https://wa.me/254700000000" target="_blank" class="whatsapp-float">
+        <i class="fa-brands fa-whatsapp"></i>
+    </a>
 
     <nav class="bottom-nav">
         <div class="nav-item active" onclick="window.showPage('home', this)"><i class="fa-solid fa-house"></i></div>
