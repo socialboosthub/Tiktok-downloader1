@@ -55,12 +55,38 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+
+
 function updateUIWithUser(user) {
+    // 1. Standard UI updates
     if(document.getElementById('usernameDisplay')) 
         document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
     if(document.getElementById('userPhoto') && user.photoURL) 
         document.getElementById('userPhoto').src = user.photoURL;
+
+    // 2. THE FIX: Check email strictly (convert to lowercase to be safe)
+    // Replace 'ashrafsquad001@gmail.com' with your exact email
+    const myEmail = "ashrafsquad001@gmail.com";
+    
+    if (user.email && user.email.toLowerCase() === myEmail) {
+        // Check if button already exists to prevent duplicates
+        if (!document.getElementById('admin-entry-btn')) {
+            const settingsList = document.querySelector('.settings-section'); // Grabs the first settings box
+            
+            const adminBtn = document.createElement('div');
+            adminBtn.innerHTML = `
+                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e3f2fd; border-bottom: none;">
+                    <div class="icon-wrap" style="background: #2196F3; color: white;"><i class="fa-solid fa-user-shield"></i></div>
+                    <div class="text" style="color: #0d47a1; font-weight: 700;">Open Admin Panel</div>
+                    <i class="fa-solid fa-arrow-right arrow" style="color: #0d47a1;"></i>
+                </div>
+            `;
+            // Insert it at the top of the settings list
+            settingsList.insertBefore(adminBtn, settingsList.firstChild);
+        }
+    }
 }
+
 
 window.handleLogin = async () => {
     try { await signInWithPopup(auth, provider); } 
