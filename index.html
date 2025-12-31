@@ -3,133 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EggMaster Pro</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <title>EggMaster Wholesale</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module" src="script.js" defer></script>
 </head>
 <body class="not-logged-in">
 
     <div id="login-overlay" class="login-screen">
+        <div class="login-blobs">
+            <div class="blob blob-1"></div>
+            <div class="blob blob-2"></div>
+        </div>
         <div class="login-content">
+            <div class="logo-anim">
+                <i class="fa-solid fa-egg"></i>
+                <div class="yolk-glow"></div>
+            </div>
             <h1>EggMaster<span class="dot">.</span></h1>
-            <p>Farm fresh goodness (Min 30 Trays)</p>
-            <button id="google-login-btn" class="google-btn">
-                <i class="fa-brands fa-google"></i> Continue with Google
-            </button>
-        </div>
-    </div>
-
-    <div id="map-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 90%; height: 80vh; display: flex; flex-direction: column;">
-            <h3>Select Delivery Location</h3>
-            <div class="search-bar" style="display:flex; gap:5px; margin-bottom:10px;">
-                <input type="text" id="mapSearchInput" placeholder="Search area (e.g. Bamburi)" style="flex:1; padding:10px; border-radius:8px; border:1px solid #ddd;">
-                <button onclick="window.searchMap()" style="padding:10px; background:var(--primary); border:none; border-radius:8px;">Search</button>
-            </div>
-            <div id="mapContainer" style="flex:1; border-radius:12px;"></div>
-            <button class="save-btn" onclick="window.confirmLocation()" style="width:100%; margin-top:10px; padding:15px;">Confirm Location</button>
-            <button class="cancel-btn" onclick="document.getElementById('map-modal').style.display='none'" style="width:100%; margin-top:5px;">Close</button>
-        </div>
-    </div>
-
-    <div id="profile-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h3>Edit Profile</h3>
-            <input type="text" id="editNameInput" placeholder="Name" style="width:100%; padding:10px; margin-bottom:10px;">
-            <input type="text" id="editPhotoInput" placeholder="Photo URL" style="width:100%; padding:10px; margin-bottom:10px;">
-            <div class="modal-actions">
-                <button class="cancel-btn" onclick="window.closeProfileModal()">Cancel</button>
-                <button class="save-btn" onclick="window.saveProfile()">Save</button>
+            <p>Wholesale Supply (Min 30 Trays)</p>
+            <div class="login-actions">
+                <button id="google-login-btn" class="google-btn">
+                    <i class="fa-brands fa-google"></i>
+                    Continue with Google
+                </button>
             </div>
         </div>
     </div>
 
-    <a href="https://wa.me/254745862002" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+    <div id="mpesa-modal" class="modal-overlay">
+        <div class="mpesa-card">
+            <div class="mpesa-header">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" alt="M-Pesa">
+            </div>
+            <div class="mpesa-body">
+                <h3>Lipa na M-Pesa</h3>
+                <p>Total: <span style="color:var(--green-text); font-weight:700;">Ksh <span id="mpesaAmount">0</span></span></p>
+                <div class="input-group">
+                    <label>Phone Number</label>
+                    <input type="tel" id="mpesaPhone" placeholder="07XX XXX XXX" value="">
+                </div>
+                <button class="mpesa-btn" onclick="window.startMpesaProcess()">Pay Now</button>
+                <button class="text-btn" onclick="document.getElementById('mpesa-modal').style.display='none'">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="location-modal" class="modal-overlay">
+        <div class="modal-content location-content">
+            <div class="maps-header">
+                <i class="fa-solid fa-arrow-left" onclick="document.getElementById('location-modal').style.display='none'"></i>
+                <div class="maps-input-wrapper">
+                    <input type="text" id="locSearch" placeholder="Search Mombasa area..." onkeyup="window.filterLocations()">
+                    <i class="fa-solid fa-xmark" onclick="document.getElementById('locSearch').value=''; window.filterLocations()"></i>
+                </div>
+            </div>
+            
+            <div id="locationList" class="maps-list">
+                </div>
+        </div>
+    </div>
+
+    <div id="admin-panel" class="modal-overlay">
+        <div class="modal-content admin-content">
+            <div class="admin-header">
+                <h3>Admin Dashboard</h3>
+                <button onclick="document.getElementById('admin-panel').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div id="adminPriceControl" style="display:none; margin-bottom: 20px; padding:15px; background:#f0f0f0; border-radius:12px;">
+                <label>Update Price Per Tray:</label>
+                <div style="display:flex; gap:10px; margin-top:5px;">
+                    <input type="number" id="newPriceInput" placeholder="Current: 450">
+                    <button onclick="window.updateGlobalPrice()" style="background:#333; color:white; border:none; padding:5px 15px; border-radius:5px;">Save</button>
+                </div>
+            </div>
+
+            <div id="adminOrderList" class="admin-order-list">
+                <p>Loading orders...</p>
+            </div>
+        </div>
+    </div>
 
     <header class="top-bar">
         <div class="user-info">
-            <small id="welcome-text">Good Morning,</small>
-            <h3 id="usernameDisplay">User</h3>
+            <small>Good Morning,</small>
+            <h3 id="usernameDisplay">Egg Wholesaler</h3>
         </div>
         <div class="header-actions">
-            <button id="adminBtn" onclick="window.location.href='admin.html'" class="icon-btn" style="display:none; color: red; border-color: red;">
-                <i class="fa-solid fa-user-shield"></i>
-            </button>
-            
-            <div class="icon-btn" onclick="window.showPage('notifications-page')">
+            <div class="icon-btn" onclick="window.toggleNotifDropdown()">
                 <i class="fa-regular fa-bell"></i>
                 <div id="notifBadge" class="dot-badge" style="display:none;"></div>
+                
+                <div id="notifDropdown" class="notif-dropdown">
+                    <div class="notif-header">Notifications</div>
+                    <div id="notifList" class="notif-items">
+                        <p class="empty-msg">No new notifications</p>
+                    </div>
+                </div>
             </div>
-            <div class="profile-pic"><img src="" id="userPhoto" alt="User"></div>
+
+            <div class="profile-pic">
+                <img src="https://ui-avatars.com/api/?name=User&background=FFB300&color=fff" id="userPhoto" alt="User">
+            </div>
         </div>
     </header>
 
     <section id="home" class="page active">
         <div class="hero-card">
             <div class="hero-text">
-                <span class="tag">Wholesale</span>
-                <h2 data-i18n="heroTitle">Bulk Fresh Eggs</h2>
-                <button onclick="window.showPage('shop')">Order Now</button>
+                <span class="tag">Wholesale Only</span>
+                <h2>Fresh Kienyeji<br>Eggs Supply</h2>
+                <button id="heroOrderBtn">Order Now <i class="fa-solid fa-arrow-right"></i></button>
             </div>
-            <div class="hero-img">🥚</div>
+            <div class="hero-img">🐓</div>
         </div>
+
         <div class="stats-row">
             <div class="stat-card highlight">
                 <i class="fa-solid fa-basket-shopping"></i>
-                <div><b id="homeOrderCount">0</b><span data-i18n="statOrders">My Orders</span></div>
+                <div>
+                    <b id="homeOrderCount">0</b>
+                    <span>My Orders</span>
+                </div>
             </div>
+        </div>
+
+        <div id="adminBtnContainer" style="padding: 0 24px; display:none;">
+            <button onclick="window.openAdminPanel()" style="width:100%; padding:15px; background:#333; color:white; border:none; border-radius:12px; font-weight:600;">
+                <i class="fa-solid fa-shield-halved"></i> Open Admin Panel
+            </button>
         </div>
     </section>
 
     <section id="shop" class="page">
-        <h2 class="page-title" data-i18n="navShop">Shop</h2>
-        <div class="product-card" style="margin: 0 24px;">
-            <h3>Tray of 30</h3>
-            <div class="price-row">Ksh <span id="dynamicPrice">450</span></div>
-            <div class="qty-control" style="margin: 15px 0;">
-                <button onclick="updateQty(-1)">-</button>
-                <span id="shopQty">30</span>
-                <button onclick="updateQty(1)">+</button>
+        <h2 class="page-title">Wholesale Shop</h2>
+        <div class="product-grid" style="grid-template-columns: 1fr;"> 
+            <div class="product-card">
+                <div class="prod-img-wrapper"><div class="prod-emoji">🥚</div></div>
+                <div class="prod-details">
+                    <h3>Tray of 30</h3>
+                    <div class="prod-desc">Fresh Kienyeji Eggs (Yellow Yolk)</div>
+                    <div class="price-row"><span>Ksh</span> <span id="displayPrice">450</span> <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
+                    
+                    <div class="warning-box" style="background:#fff3cd; color:#856404; padding:8px; border-radius:8px; font-size:11px; margin-bottom:10px;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Minimum Order: 30 Trays
+                    </div>
+
+                    <div class="action-row">
+                        <div class="qty-control">
+                            <button onclick="updateQty(-1)">-</button>
+                            <span class="qty-display" id="shopQty">30</span>
+                            <button onclick="updateQty(1)">+</button>
+                        </div>
+                        <button class="add-btn" onclick="window.initiateOrder()">
+                            Buy Now
+                        </button>
+                    </div>
+                </div>
             </div>
-            <input type="tel" id="mpesaNumber" placeholder="M-Pesa Number" style="width:100%; padding:12px; margin-bottom:10px; border-radius:8px; border:1px solid #ddd;">
-            <button class="add-btn" onclick="window.placeOrder()" style="width:100%;">Buy Now & Pay</button>
         </div>
     </section>
 
     <section id="orders" class="page">
-        <h2 class="page-title" data-i18n="myOrders">My Orders</h2>
-        <div id="ordersList"></div>
-    </section>
-
-    <section id="notifications-page" class="page">
-        <h2 class="page-title">Notifications</h2>
-        <div id="fullNotifList"></div>
+        <h2 class="page-title">My Orders</h2>
+        <div id="ordersList" class="orders-list"></div>
     </section>
 
     <section id="settings" class="page">
-        <h2 class="page-title" data-i18n="navSettings">Settings</h2>
+        <h2 class="page-title">Settings</h2>
+        
         <div class="settings-section">
-            <div class="setting-item clickable" onclick="window.openProfileModal()">Edit Profile</div>
-            <div class="setting-item clickable" onclick="window.openMapModal()">
-                Set Delivery Location <br> <small id="currentCoords" style="color:var(--primary);">Not Set</small>
-            </div>
-            <div class="setting-item">
-                <span data-i18n="setTheme">Dark Mode</span>
-                <input type="checkbox" id="themeToggle" onchange="window.toggleTheme()">
-            </div>
-            <div class="setting-item">
-                <span data-i18n="setLanguage">Language</span>
-                <select id="langSelect" onchange="window.changeLanguage(this.value)">
-                    <option value="en">English</option>
-                    <option value="sw">Kiswahili</option>
-                </select>
+            <div class="setting-item clickable" onclick="window.initLocationFlow()">
+                <div class="icon-wrap color-green"><i class="fa-solid fa-location-dot"></i></div>
+                <div class="text">
+                    <div id="locationStatus">Delivery Location</div>
+                    <small id="currentCoords">Tap to search area</small>
+                </div>
+                <i class="fa-solid fa-chevron-right arrow"></i>
             </div>
         </div>
-        <button class="logout-btn" onclick="window.logoutUser()">Logout</button>
+
+        <div class="settings-section">
+            <div class="setting-item">
+                <div class="icon-wrap color-blue"><i class="fa-brands fa-whatsapp"></i></div>
+                <div class="text">Contact Support</div>
+                <a href="https://wa.me/254745862002" target="_blank" style="text-decoration:none; color:var(--primary-dark); font-weight:600; font-size:14px;">Chat</a>
+            </div>
+        </div>
+
+        <button class="logout-btn" onclick="window.logoutUser()" style="width: calc(100% - 48px); margin: 24px; padding: 15px; border-radius: 12px; border: none; background: #FFEBEE; color: #F44336; font-weight: 700;">Logout</button>
     </section>
 
     <nav class="bottom-nav">
