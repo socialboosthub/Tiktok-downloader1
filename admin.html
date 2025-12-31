@@ -3,110 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard</title>
+    <title>EggMaster Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
-        body { padding: 20px; background: #f0f2f5; }
-        .admin-card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; font-size: 14px; }
-        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #fff3cd; color: #856404; }
-        .map-btn { background: #E3F2FD; color: #2196F3; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; text-decoration: none;}
+        .admin-container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .price-editor { background: #E3F2FD; padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid #BBDEFB; }
+        .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .order-header { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .status-Pending { background: #FFF3E0; color: #E65100; }
+        .status-Delivered { background: #E8F5E9; color: #2E7D32; }
+        .admin-actions { display: flex; gap: 10px; margin-top: 10px; }
+        .btn-deliver { background: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .btn-map { background: #2196F3; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; }
     </style>
+</head>
+<body>
+
+    <div class="admin-container">
+        <div class="admin-header">
+            <h2>Admin Dashboard</h2>
+            <button onclick="window.location.href='index.html'" style="padding:8px 12px; border:none; background:#eee; border-radius:8px;">Back to App</button>
+        </div>
+
+        <div id="auth-check" style="text-align:center; display:none;">
+            <h3>Verifying Admin Privileges...</h3>
+        </div>
+
+        <div id="admin-panel" style="display:none;">
+            
+            <div class="price-editor">
+                <h4><i class="fa-solid fa-tag"></i> Set Wholesale Price</h4>
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <input type="number" id="adminPriceInput" style="padding:10px; border-radius:8px; border:1px solid #ccc; width:100px;">
+                    <button onclick="updateGlobalPrice()" style="padding:10px 20px; background:#1976D2; color:white; border:none; border-radius:8px; cursor:pointer;">Update Price</button>
+                </div>
+                <small style="color:#555;">Current customers will see this price immediately.</small>
+            </div>
+
+            <h3>Incoming Orders</h3>
+            <div id="adminOrdersList">Loading...</div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // Same Config as Script.js
         const firebaseConfig = {
             apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
             authDomain: "eggshop-702f6.firebaseapp.com",
             projectId: "eggshop-702f6",
             storageBucket: "eggshop-702f6.firebasestorage.app",
             messagingSenderId: "290586261198",
-            appId: "1:290586261198:web:61cd80463c8c2c5f06429f"
+            appId: "1:290586261198:web:61cd80463c8c2c5f06429f",
+            measurementId: "G-HVJKWCER6S"
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        const ADMINS = ["ashrafsquad001@gmail.com", "abdulraxmanxamza@gmail.com"];
+        const ADMIN_EMAIL = "ashrafsquad001@gmail.com";
 
-        onAuthStateChanged(auth, user => {
-            if (!user || !ADMINS.includes(user.email)) {
-                alert("Access Denied");
-                window.location.href = "index.html";
-                return;
+        onAuthStateChanged(auth, async (user) => {
+            const check = document.getElementById('auth-check');
+            const panel = document.getElementById('admin-panel');
+            
+            if (user && user.email === ADMIN_EMAIL) {
+                if(check) check.style.display = 'none';
+                if(panel) panel.style.display = 'block';
+                loadPrice();
+                listenToAllOrders();
+            } else {
+                document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px; color:red;'>Access Denied. Admins Only.</h2><center><a href='index.html'>Go Back</a></center>";
             }
-
-            // Only Ashraf can see price editor
-            if(user.email === "ashrafsquad001@gmail.com") {
-                document.getElementById('priceEditor').style.display = 'block';
-            }
-
-            loadOrders();
         });
 
-        function loadOrders() {
-            const q = query(collection(db, "orders"));
+        // 1. MANAGE PRICE
+        async function loadPrice() {
+            const docSnap = await getDoc(doc(db, "config", "pricing"));
+            if (docSnap.exists()) {
+                document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
+            } else {
+                document.getElementById('adminPriceInput').value = 385; // Default fallback
+            }
+        }
+
+        window.updateGlobalPrice = async () => {
+            const newPrice = parseInt(document.getElementById('adminPriceInput').value);
+            if(newPrice < 1) return alert("Invalid price");
+            await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
+            alert("Price updated to " + newPrice);
+        };
+
+        // 2. VIEW ALL ORDERS
+        function listenToAllOrders() {
+            const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
             onSnapshot(q, (snap) => {
-                const tbody = document.getElementById('ordersBody');
-                tbody.innerHTML = '';
-                const orders = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.createdAt - a.createdAt);
+                const list = document.getElementById('adminOrdersList');
+                list.innerHTML = "";
                 
-                orders.forEach(order => {
-                    const lat = order.location?.lat;
-                    const lng = order.location?.lng;
-                    const mapLink = lat ? `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="map-btn">View Map</a>` : 'No Loc';
-                    
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${order.userName}<br><small>${order.phone}</small></td>
-                            <td>${order.quantity} Trays</td>
-                            <td>Ksh ${order.totalPrice}</td>
-                            <td>${mapLink}</td>
-                            <td><span class="status-badge">${order.status}</span></td>
-                        </tr>
+                // Simple Notification sound/alert logic could go here if snap.docChanges type is 'added'
+                
+                snap.forEach(docSnap => {
+                    const o = docSnap.data();
+                    const date = o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : new Date(o.createdAt).toLocaleString();
+                    const isPending = o.status === 'Pending' || o.status === 'Paid'; // Paid via M-Pesa but not delivered
+
+                    list.innerHTML += `
+                        <div class="order-card">
+                            <div class="order-header">
+                                <strong>Order #${docSnap.id.slice(0,5)}</strong>
+                                <span class="status-badge status-${o.status}">${o.status}</span>
+                            </div>
+                            <div style="font-size:14px; margin-bottom:5px;">
+                                <b>${o.quantity} Trays</b> (${o.item}) <br>
+                                Total: Ksh ${o.totalPrice} <br>
+                                M-Pesa: ${o.mpesaNumber || 'N/A'}
+                            </div>
+                            <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                                <i class="fa-solid fa-user"></i> ${o.userName || 'User'} <br>
+                                <i class="fa-solid fa-location-dot"></i> ${o.address} <br>
+                                <i class="fa-regular fa-clock"></i> ${date}
+                            </div>
+                            <div class="admin-actions">
+                                <button class="btn-map" onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address + ', Mombasa')}')">
+                                    <i class="fa-solid fa-map-location-dot"></i> Map
+                                </button>
+                                ${isPending ? `
+                                <button class="btn-deliver" onclick="markDelivered('${docSnap.id}')">
+                                    <i class="fa-solid fa-check"></i> Mark Delivered
+                                </button>` : ''}
+                                <a href="https://wa.me/254${o.mpesaNumber ? o.mpesaNumber.substring(1) : ''}?text=Hello, regarding your egg order..." target="_blank" class="btn-map" style="background:#25D366; text-decoration:none; display:inline-block; text-align:center;">
+                                    <i class="fa-brands fa-whatsapp"></i> Chat
+                                </a>
+                            </div>
+                        </div>
                     `;
                 });
             });
         }
 
-        window.updatePrice = async () => {
-            const newPrice = Number(document.getElementById('priceInput').value);
-            if(newPrice > 0) {
-                await updateDoc(doc(db, "products", "eggs"), { price: newPrice });
-                alert("Price updated!");
+        window.markDelivered = async (id) => {
+            if(confirm("Confirm delivery?")) {
+                await updateDoc(doc(db, "orders", id), { status: 'Delivered' });
             }
         };
     </script>
-</head>
-<body>
-    <h2>Admin Dashboard</h2>
-    <a href="index.html" style="margin-bottom:20px; display:inline-block;">&larr; Back to Shop</a>
-
-    <div id="priceEditor" class="admin-card" style="display:none;">
-        <h3>Update Price</h3>
-        <input type="number" id="priceInput" placeholder="New Price per Tray">
-        <button onclick="window.updatePrice()" style="background:#FFB300; border:none; padding:10px; border-radius:5px; cursor:pointer;">Update</button>
-    </div>
-
-    <div class="admin-card">
-        <h3>Recent Orders</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Customer</th>
-                    <th>Qty</th>
-                    <th>Total</th>
-                    <th>Location</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="ordersBody">
-                </tbody>
-        </table>
-    </div>
 </body>
 </html>
