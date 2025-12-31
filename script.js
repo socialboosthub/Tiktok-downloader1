@@ -1,6 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// NEW: Added Storage imports for the Gallery Upload
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
@@ -15,6 +17,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app); // Init Storage
 const provider = new GoogleAuthProvider();
 
 let userLocation = null;
@@ -38,15 +41,9 @@ onAuthStateChanged(auth, async (user) => {
         if(overlay) overlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
         
-        // ADMIN CHECK
-        if(user.email === "ashrafsquad001@gmail.com" && !window.location.href.includes('admin.html')) {
-            const goAdmin = confirm("Admin account detected. Go to Admin Dashboard?");
-            if(goAdmin) window.location.href = "admin.html";
-        }
-
         updateUIWithUser(user);
         await loadUserSettings();
-        fetchLivePrice(); // GET PRICE FROM DB
+        fetchLivePrice(); 
         listenToOrders();
         listenToNotifications(); 
     } else {
@@ -55,38 +52,35 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-
-
 function updateUIWithUser(user) {
-    // 1. Standard UI updates
+    // 1. Update Name and Photo
     if(document.getElementById('usernameDisplay')) 
         document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
     if(document.getElementById('userPhoto') && user.photoURL) 
         document.getElementById('userPhoto').src = user.photoURL;
 
-    // 2. THE FIX: Check email strictly (convert to lowercase to be safe)
-    // Replace 'ashrafsquad001@gmail.com' with your exact email
+    // 2. ADMIN BUTTON INJECTION (Safe Way)
+    // Only shows if email matches exactly
     const myEmail = "ashrafsquad001@gmail.com";
-    
     if (user.email && user.email.toLowerCase() === myEmail) {
-        // Check if button already exists to prevent duplicates
+        // Look for existing button to avoid duplicates
         if (!document.getElementById('admin-entry-btn')) {
-            const settingsList = document.querySelector('.settings-section'); // Grabs the first settings box
-            
-            const adminBtn = document.createElement('div');
-            adminBtn.innerHTML = `
-                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e3f2fd; border-bottom: none;">
-                    <div class="icon-wrap" style="background: #2196F3; color: white;"><i class="fa-solid fa-user-shield"></i></div>
-                    <div class="text" style="color: #0d47a1; font-weight: 700;">Open Admin Panel</div>
-                    <i class="fa-solid fa-arrow-right arrow" style="color: #0d47a1;"></i>
-                </div>
-            `;
-            // Insert it at the top of the settings list
-            settingsList.insertBefore(adminBtn, settingsList.firstChild);
+            const settingsList = document.querySelector('.settings-section'); 
+            if(settingsList) {
+                const adminBtn = document.createElement('div');
+                adminBtn.innerHTML = `
+                    <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e3f2fd; border-bottom: 1px solid #bbdefb;">
+                        <div class="icon-wrap" style="background: #2196F3; color: white;"><i class="fa-solid fa-user-shield"></i></div>
+                        <div class="text" style="color: #0d47a1; font-weight: 700;">Open Admin Panel</div>
+                        <i class="fa-solid fa-arrow-right arrow" style="color: #0d47a1;"></i>
+                    </div>
+                `;
+                // Add to top of settings
+                settingsList.insertBefore(adminBtn, settingsList.firstChild);
+            }
         }
     }
 }
-
 
 window.handleLogin = async () => {
     try { await signInWithPopup(auth, provider); } 
@@ -95,23 +89,19 @@ window.handleLogin = async () => {
 const loginBtn = document.getElementById('google-login-btn');
 if (loginBtn) loginBtn.onclick = window.handleLogin;
 
-// --- DYNAMIC PRICE FETCH ---
+// --- DYNAMIC PRICE ---
 async function fetchLivePrice() {
     try {
-        // We listen to the config document for changes in real-time
         onSnapshot(doc(db, "config", "pricing"), (doc) => {
             if (doc.exists()) {
                 currentEggPrice = doc.data().currentPrice || 385;
             } else {
                 currentEggPrice = 385;
             }
-            // Update UI
             const priceDisplay = document.getElementById('dynamicPriceDisplay');
             if(priceDisplay) priceDisplay.innerText = currentEggPrice;
         });
-    } catch(e) {
-        console.error("Error fetching price", e);
-    }
+    } catch(e) { console.error("Error fetching price", e); }
 }
 
 // --- ORDER & M-PESA LOGIC ---
@@ -123,37 +113,29 @@ window.updateQty = (change) => {
     display.innerText = newVal;
 };
 
-// 1. Open Modal
 window.initiateOrder = () => {
     if (!auth.currentUser) return alert("Please login first.");
     if (!userLocation) {
         if(confirm("No delivery address! Set one now?")) window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
         return;
     }
-    
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const total = quantity * currentEggPrice;
-    
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
     document.getElementById('mpesa-modal').style.display = 'flex';
 };
 
-// 2. Simulate Payment
 window.triggerMpesa = async () => {
     const phone = document.getElementById('mpesaNumber').value;
     const btn = document.getElementById('payBtn');
     
     if(phone.length < 10) return alert("Please enter a valid M-Pesa number");
 
-    // UI Simulation
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Sending STK Push...`;
 
-    // Wait 3 seconds to mimic network request
     setTimeout(async () => {
         btn.innerHTML = `<i class="fa-solid fa-mobile-screen"></i> Check your phone for PIN...`;
-        
-        // Wait 3 more seconds to mimic user entering PIN
         setTimeout(async () => {
             await finalizeOrder(phone);
             btn.disabled = false;
@@ -163,7 +145,6 @@ window.triggerMpesa = async () => {
     }, 2500);
 };
 
-// 3. Save to DB
 async function finalizeOrder(mpesaNumber) {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const totalPrice = quantity * currentEggPrice;
@@ -177,7 +158,7 @@ async function finalizeOrder(mpesaNumber) {
             unitPrice: currentEggPrice, 
             quantity, 
             totalPrice,
-            status: 'Pending', // Or 'Paid' if we assume success
+            status: 'Pending',
             mpesaNumber: mpesaNumber,
             address: userLocation.address,
             createdAt: new Date()
@@ -192,36 +173,80 @@ async function finalizeOrder(mpesaNumber) {
     }
 }
 
-// 4. Update Floating Button
 function generateWhatsAppLink(qty, total, loc) {
     const btn = document.querySelector('.whatsapp-float');
     const msg = `Hi EggMaster, I just ordered ${qty} Trays for Ksh ${total}. Location: ${loc}.`;
     if(btn) btn.href = `https://wa.me/254700000000?text=${encodeURIComponent(msg)}`;
 }
 
-// --- PROFILE, SETTINGS, LOCATION (Existing Code Preserved) ---
+// --- PROFILE EDITING (WITH GALLERY UPLOAD) ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
     document.getElementById('editNameInput').value = user.displayName || "";
-    document.getElementById('editPhotoInput').value = user.photoURL || "";
+    document.getElementById('previewImg').style.display = 'none'; // Reset preview
     document.getElementById('profile-modal').style.display = 'flex';
 };
+
 window.closeProfileModal = () => { document.getElementById('profile-modal').style.display = 'none'; };
-window.saveProfile = async () => {
-    const name = document.getElementById('editNameInput').value;
-    const photo = document.getElementById('editPhotoInput').value;
-    if(!name) return alert("Name cannot be empty");
-    try {
-        await updateProfile(auth.currentUser, { displayName: name, photoURL: photo });
-        await setDoc(doc(db, "users", auth.currentUser.uid), { name, photo }, { merge: true });
-        document.getElementById('usernameDisplay').innerText = name;
-        if(photo) document.getElementById('userPhoto').src = photo;
-        window.closeProfileModal();
-    } catch(e) { alert("Error: " + e.message); }
+
+// Preview the selected image
+window.previewFile = () => {
+    const file = document.getElementById('editPhotoFile').files[0];
+    const preview = document.getElementById('previewImg');
+    if(file){
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = 'block';
+    }
 };
 
-// Settings
+window.saveProfile = async () => {
+    const name = document.getElementById('editNameInput').value;
+    const fileInput = document.getElementById('editPhotoFile');
+    const saveBtn = document.getElementById('saveProfileBtn');
+    
+    if(!name) return alert("Name cannot be empty");
+
+    saveBtn.innerText = "Saving...";
+    saveBtn.disabled = true;
+
+    try {
+        let photoURL = auth.currentUser.photoURL;
+
+        // 1. Check if a new file is selected
+        if(fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            // Create a reference to 'profile_pics/USER_ID'
+            const storageRef = ref(storage, `profile_pics/${auth.currentUser.uid}`);
+            
+            // Upload
+            await uploadBytes(storageRef, file);
+            
+            // Get URL
+            photoURL = await getDownloadURL(storageRef);
+        }
+
+        // 2. Update Auth & Firestore
+        await updateProfile(auth.currentUser, { displayName: name, photoURL: photoURL });
+        await setDoc(doc(db, "users", auth.currentUser.uid), { name: name, photo: photoURL }, { merge: true });
+        
+        // 3. UI Update
+        document.getElementById('usernameDisplay').innerText = name;
+        if(photoURL) document.getElementById('userPhoto').src = photoURL;
+
+        window.closeProfileModal();
+        alert("Profile Updated Successfully!");
+
+    } catch(e) {
+        alert("Error: " + e.message + "\n(Did you enable Storage in Firebase Console?)");
+        console.error(e);
+    } finally {
+        saveBtn.innerText = "Save Changes";
+        saveBtn.disabled = false;
+    }
+};
+
+// --- SETTINGS, LOCATION, NOTIFS (UNCHANGED) ---
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
@@ -239,6 +264,7 @@ async function loadUserSettings() {
         }
     } catch(e) { console.error(e); }
 }
+
 window.toggleTheme = async () => {
     const toggle = document.getElementById('themeToggle');
     const theme = toggle.checked ? 'dark' : 'light';
@@ -247,7 +273,14 @@ window.toggleTheme = async () => {
     if (auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { theme }, { merge: true });
 };
 
-// Location
+window.changeLanguage = async (lang) => {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang] && translations[lang][key]) el.innerText = translations[lang][key];
+    });
+    if (auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { lang }, { merge: true });
+};
+
 window.initLocationFlow = function() {
     const choice = confirm("Use GPS to find your location automatically?\nCancel to search manually.");
     if (choice) {
@@ -262,10 +295,12 @@ window.initLocationFlow = function() {
         );
     } else { window.openLocationSearch(); }
 };
+
 window.openLocationSearch = () => {
     document.getElementById('location-modal').style.display = 'flex';
     window.renderLocationList(MOMBASA_AREAS);
 };
+
 window.renderLocationList = (areas) => {
     const list = document.getElementById('locationList');
     list.innerHTML = '';
@@ -277,23 +312,25 @@ window.renderLocationList = (areas) => {
         list.appendChild(item);
     });
 };
+
 window.filterLocations = () => {
     const queryStr = document.getElementById('locSearch').value.toLowerCase();
     const filtered = MOMBASA_AREAS.filter(a => a.toLowerCase().includes(queryStr));
     window.renderLocationList(filtered);
 };
+
 window.selectLocation = (address) => {
     userLocation = { address: address };
     saveLoc();
     document.getElementById('location-modal').style.display = 'none';
 };
+
 async function saveLoc() {
     if(!userLocation) return;
     document.getElementById('currentCoords').innerText = userLocation.address;
     if(auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
 }
 
-// Notifications
 async function createNotification(msg) {
     if(!auth.currentUser) return;
     await addDoc(collection(db, "notifications"), {
@@ -301,6 +338,7 @@ async function createNotification(msg) {
         message: msg, read: false, timestamp: new Date()
     });
 }
+
 function listenToNotifications() {
     if(!auth.currentUser) return;
     const q = query(collection(db, "notifications"), where("userId", "==", auth.currentUser.uid));
@@ -324,7 +362,6 @@ function listenToNotifications() {
     });
 }
 
-// Orders Listener
 function listenToOrders() {
     if(!auth.currentUser) return;
     const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
@@ -337,7 +374,6 @@ function listenToOrders() {
         
         const docs = snap.docs.map(d => d.data()).sort((a,b) => b.createdAt.seconds - a.createdAt.seconds);
         
-        // Update Home Recent Activity
         if(docs.length > 0) {
             const last = docs[0];
             if(document.getElementById('recentItemName')) document.getElementById('recentItemName').innerText = `${last.quantity}x ${last.item}`;
@@ -351,7 +387,7 @@ function listenToOrders() {
                 <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
                 <div class="details">
                     <h4>${o.quantity}x ${o.item}</h4>
-                    <small>${o.status} &bull; ${o.address}</small>
+                    <small>${o.status} • ${o.address}</small>
                 </div>
                 <span class="price">Ksh ${o.totalPrice}</span>
             </div>`;
@@ -359,7 +395,6 @@ function listenToOrders() {
     });
 }
 
-// Navigation
 window.showPage = (id, el) => {
     document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
     const target = document.getElementById(id);
@@ -367,6 +402,9 @@ window.showPage = (id, el) => {
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
     if(el) el.classList.add('active');
 };
+
 const heroBtn = document.getElementById('heroOrderBtn');
 if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
+
 window.logoutUser = () => signOut(auth).then(() => location.reload());
+
