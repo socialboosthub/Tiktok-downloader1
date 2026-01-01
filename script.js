@@ -40,7 +40,9 @@ onAuthStateChanged(auth, async (user) => {
         if(overlay) overlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
         
-        updateUIWithUser(user);
+        // Ensure UI updates wait for the DOM to be ready
+        setTimeout(() => updateUIWithUser(user), 500);
+        
         await loadUserSettings();
         fetchLivePrice(); 
         listenToOrders();
@@ -51,44 +53,77 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- UPDATED: UI LOGIC FOR ADMINS ---
+// --- UPDATED: ROBUST UI LOGIC FOR ADMINS ---
 function updateUIWithUser(user) {
+    console.log("Logged in as:", user.email); // Check your console to see this!
+
     // 1. Update Name and Photo
     if(document.getElementById('usernameDisplay')) 
         document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
     if(document.getElementById('userPhoto') && user.photoURL) 
         document.getElementById('userPhoto').src = user.photoURL;
 
-    // 2. ROLE BASED BUTTONS
-    const email = user.email ? user.email.toLowerCase() : "";
-    const settingsList = document.querySelector('.settings-section'); 
+    // 2. CHECK EMAIL (Case Insensitive & Trimmed)
+    // Even though you use Google Login, Firebase still provides the email here.
+    const email = user.email ? user.email.toLowerCase().trim() : "";
+    
+    let role = null;
+    if (email === "ashrafsquad001@gmail.com") role = "SUPER";
+    else if (email === "abdulraxmanxamza@gmail.com") role = "MANAGER";
 
-    // Remove old button if exists
-    const oldBtn = document.getElementById('admin-entry-btn');
-    if(oldBtn) oldBtn.remove();
+    if (role) {
+        console.log("Role Detected:", role);
 
-    if (settingsList) {
-        if (email === "ashrafsquad001@gmail.com") {
-            // SUPER ADMIN BUTTON
-            const adminBtn = document.createElement('div');
-            adminBtn.innerHTML = `
-                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e3f2fd; border-bottom: 1px solid #bbdefb;">
-                    <div class="icon-wrap" style="background: #2196F3; color: white;"><i class="fa-solid fa-crown"></i></div>
-                    <div class="text" style="color: #0d47a1; font-weight: 700;">Super Admin Panel</div>
+        // --- A. ADD BUTTON TO HEADER (Top Right) ---
+        // This is the most reliable place. It will appear next to your profile pic.
+        const headerActions = document.querySelector('.header-actions');
+        
+        // Remove old button if exists to prevent duplicates
+        const oldHeaderBtn = document.getElementById('header-admin-btn');
+        if(oldHeaderBtn) oldHeaderBtn.remove();
+
+        if (headerActions) {
+            const btn = document.createElement('div');
+            btn.id = "header-admin-btn";
+            btn.className = "icon-btn";
+            
+            // Styling based on role
+            const bgColor = role === "SUPER" ? "#E3F2FD" : "#E8F5E9"; // Blue or Green
+            const textColor = role === "SUPER" ? "#1565C0" : "#2E7D32";
+            const icon = role === "SUPER" ? '<i class="fa-solid fa-crown"></i>' : '<i class="fa-solid fa-truck-fast"></i>';
+
+            btn.style.cssText = `background-color: ${bgColor}; color: ${textColor}; margin-right: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #ccc;`;
+            btn.innerHTML = icon;
+            
+            // CLICK ACTION
+            btn.onclick = () => window.location.href = 'admin.html';
+            
+            // Insert it at the beginning of the header actions
+            headerActions.insertBefore(btn, headerActions.firstChild);
+        }
+
+        // --- B. ADD BUTTON TO SETTINGS (Backup) ---
+        const settingsSection = document.querySelector('.settings-section'); 
+        const oldSettingsBtn = document.getElementById('admin-entry-btn');
+        if(oldSettingsBtn) oldSettingsBtn.remove();
+
+        if (settingsSection) {
+            const settingsBtn = document.createElement('div');
+            const bgColor = role === "SUPER" ? "#e3f2fd" : "#e8f5e9";
+            const iconColor = role === "SUPER" ? "#2196F3" : "#4CAF50";
+            const textColor = role === "SUPER" ? "#0d47a1" : "#1b5e20";
+            const iconClass = role === "SUPER" ? "fa-solid fa-crown" : "fa-solid fa-truck-fast";
+            const btnText = role === "SUPER" ? "Super Admin Panel" : "Delivery Dashboard";
+
+            settingsBtn.innerHTML = `
+                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" 
+                     style="background: ${bgColor}; border-bottom: 1px solid #ccc;">
+                    <div class="icon-wrap" style="background: ${iconColor}; color: white;"><i class="${iconClass}"></i></div>
+                    <div class="text" style="color: ${textColor}; font-weight: 700;">${btnText}</div>
                     <i class="fa-solid fa-arrow-right arrow"></i>
                 </div>`;
-            settingsList.insertBefore(adminBtn, settingsList.firstChild);
-        } 
-        else if (email === "abdulraxmanxamza@gmail.com") {
-            // ORDER MANAGER BUTTON
-            const managerBtn = document.createElement('div');
-            managerBtn.innerHTML = `
-                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e8f5e9; border-bottom: 1px solid #c8e6c9;">
-                    <div class="icon-wrap" style="background: #4CAF50; color: white;"><i class="fa-solid fa-truck-fast"></i></div>
-                    <div class="text" style="color: #1b5e20; font-weight: 700;">Delivery Dashboard</div>
-                    <i class="fa-solid fa-arrow-right arrow"></i>
-                </div>`;
-            settingsList.insertBefore(managerBtn, settingsList.firstChild);
+            
+            settingsSection.insertBefore(settingsBtn, settingsSection.firstChild);
         }
     }
 }
