@@ -23,11 +23,45 @@
             </div>
             <h1>EggMaster<span class="dot">.</span></h1>
             <p>Wholesale Supply (Min 30 Trays)</p>
+            
             <div class="login-actions">
                 <button id="google-login-btn" class="google-btn">
                     <i class="fa-brands fa-google"></i>
-                    Continue with Google
+                    Login (Normal)
                 </button>
+                
+                <button id="admin-login-btn" class="admin-entry-btn" onclick="document.getElementById('admin-modal').style.display='flex'">
+                    <i class="fa-solid fa-user-shield"></i>
+                    Login as Admin
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="color: #0d47a1;">Admin Access</h3>
+            
+            <div class="input-group">
+                <label>Admin Email</label>
+                <input type="email" id="adminEmail" placeholder="admin@gmail.com">
+            </div>
+
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="adminPass" placeholder="Enter Password">
+            </div>
+
+            <div class="input-group">
+                <label>Security Code</label>
+                <input type="password" id="adminSecCode" placeholder="Enter Security Code" maxlength="7">
+            </div>
+
+            <div id="adminError" style="color:red; font-size:12px; margin-bottom:10px; display:none; text-align:center;"></div>
+
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="document.getElementById('admin-modal').style.display='none'">Cancel</button>
+                <button id="adminSubmitBtn" class="save-btn" style="background: #0d47a1; color: white;">Login</button>
             </div>
         </div>
     </div>
@@ -59,7 +93,7 @@
         </div>
     </div>
 
-        <div id="profile-modal" class="modal-overlay">
+    <div id="profile-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Edit Profile</h3>
             
@@ -82,7 +116,6 @@
             </div>
         </div>
     </div>
-
 
     <div id="location-modal" class="modal-overlay">
         <div class="modal-content location-content">
@@ -238,4 +271,3 @@
 
 </body>
 </html>
-
