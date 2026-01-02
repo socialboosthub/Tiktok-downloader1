@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
@@ -40,6 +40,8 @@ onAuthStateChanged(auth, async (user) => {
         if(overlay) overlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
         
+        // If it's an admin, we might want to redirect straight to admin.html if they aren't there
+        // But for now we load the UI settings
         updateUIWithUser(user);
         await loadUserSettings();
         fetchLivePrice(); 
@@ -93,12 +95,73 @@ function updateUIWithUser(user) {
     }
 }
 
+// --- NORMAL CUSTOMER LOGIN ---
 window.handleLogin = async () => {
     try { await signInWithPopup(auth, provider); } 
     catch (error) { alert("Login Failed: " + error.message); }
 };
 const loginBtn = document.getElementById('google-login-btn');
 if (loginBtn) loginBtn.onclick = window.handleLogin;
+
+
+// --- NEW: ADMIN LOGIN LOGIC (STRICT) ---
+const adminSubmitBtn = document.getElementById('adminSubmitBtn');
+if(adminSubmitBtn) {
+    adminSubmitBtn.onclick = async () => {
+        const emailInput = document.getElementById('adminEmail').value.trim().toLowerCase();
+        const passInput = document.getElementById('adminPass').value;
+        const codeInput = document.getElementById('adminSecCode').value;
+        const errorDiv = document.getElementById('adminError');
+
+        errorDiv.style.display = 'none';
+
+        // 1. Check Security Code
+        if (codeInput !== "1357911") {
+            errorDiv.innerText = "Invalid Security Code";
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        // 2. Validate Specific Email/Password Logic
+        let isValidCreds = false;
+
+        if (emailInput === "ashrafsquad001@gmail.com") {
+            if (passInput === "Ashraf.3691") isValidCreds = true;
+        } else if (emailInput === "abdulraxmanxamza@gmail.com") {
+            if (passInput === "Ahamza4066") isValidCreds = true;
+        } else {
+            errorDiv.innerText = "This email is not authorized as Admin.";
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        if (!isValidCreds) {
+            errorDiv.innerText = "Incorrect Password.";
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        // 3. If Valid Logic, Login to Firebase
+        // Note: You must enable "Email/Password" sign-in in Firebase Console 
+        // and create these users with these passwords for this to work.
+        adminSubmitBtn.disabled = true;
+        adminSubmitBtn.innerText = "Verifying...";
+
+        try {
+            await signInWithEmailAndPassword(auth, emailInput, passInput);
+            document.getElementById('admin-modal').style.display = 'none';
+            // Redirect to admin panel immediately
+            window.location.href = 'admin.html';
+        } catch (error) {
+            console.error(error);
+            errorDiv.innerText = "Auth Error: Ensure this user exists in Firebase Authentication.";
+            errorDiv.style.display = 'block';
+            adminSubmitBtn.disabled = false;
+            adminSubmitBtn.innerText = "Login";
+        }
+    };
+}
+
 
 // --- DYNAMIC PRICE ---
 async function fetchLivePrice() {
