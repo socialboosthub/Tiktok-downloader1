@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// NEW: Added Storage imports for the Gallery Upload
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -16,11 +17,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app); 
+const storage = getStorage(app); // Init Storage
 const provider = new GoogleAuthProvider();
 
 let userLocation = null;
-let currentEggPrice = 385; 
+let currentEggPrice = 385; // Default price fallback
 
 // Mombasa Areas
 const MOMBASA_AREAS = [
@@ -51,7 +52,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- UPDATED: UI LOGIC FOR ADMINS ---
 function updateUIWithUser(user) {
     // 1. Update Name and Photo
     if(document.getElementById('usernameDisplay')) 
@@ -59,36 +59,25 @@ function updateUIWithUser(user) {
     if(document.getElementById('userPhoto') && user.photoURL) 
         document.getElementById('userPhoto').src = user.photoURL;
 
-    // 2. ROLE BASED BUTTONS
-    const email = user.email ? user.email.toLowerCase() : "";
-    const settingsList = document.querySelector('.settings-section'); 
-
-    // Remove old button if exists
-    const oldBtn = document.getElementById('admin-entry-btn');
-    if(oldBtn) oldBtn.remove();
-
-    if (settingsList) {
-        if (email === "ashrafsquad001@gmail.com") {
-            // SUPER ADMIN BUTTON
-            const adminBtn = document.createElement('div');
-            adminBtn.innerHTML = `
-                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e3f2fd; border-bottom: 1px solid #bbdefb;">
-                    <div class="icon-wrap" style="background: #2196F3; color: white;"><i class="fa-solid fa-crown"></i></div>
-                    <div class="text" style="color: #0d47a1; font-weight: 700;">Super Admin Panel</div>
-                    <i class="fa-solid fa-arrow-right arrow"></i>
-                </div>`;
-            settingsList.insertBefore(adminBtn, settingsList.firstChild);
-        } 
-        else if (email === "abdulraxmanxamza@gmail.com") {
-            // ORDER MANAGER BUTTON
-            const managerBtn = document.createElement('div');
-            managerBtn.innerHTML = `
-                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e8f5e9; border-bottom: 1px solid #c8e6c9;">
-                    <div class="icon-wrap" style="background: #4CAF50; color: white;"><i class="fa-solid fa-truck-fast"></i></div>
-                    <div class="text" style="color: #1b5e20; font-weight: 700;">Delivery Dashboard</div>
-                    <i class="fa-solid fa-arrow-right arrow"></i>
-                </div>`;
-            settingsList.insertBefore(managerBtn, settingsList.firstChild);
+    // 2. ADMIN BUTTON INJECTION (Safe Way)
+    // Only shows if email matches exactly
+    const myEmail = "ashrafsquad001@gmail.com";
+    if (user.email && user.email.toLowerCase() === myEmail) {
+        // Look for existing button to avoid duplicates
+        if (!document.getElementById('admin-entry-btn')) {
+            const settingsList = document.querySelector('.settings-section'); 
+            if(settingsList) {
+                const adminBtn = document.createElement('div');
+                adminBtn.innerHTML = `
+                    <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e3f2fd; border-bottom: 1px solid #bbdefb;">
+                        <div class="icon-wrap" style="background: #2196F3; color: white;"><i class="fa-solid fa-user-shield"></i></div>
+                        <div class="text" style="color: #0d47a1; font-weight: 700;">Open Admin Panel</div>
+                        <i class="fa-solid fa-arrow-right arrow" style="color: #0d47a1;"></i>
+                    </div>
+                `;
+                // Add to top of settings
+                settingsList.insertBefore(adminBtn, settingsList.firstChild);
+            }
         }
     }
 }
@@ -156,24 +145,10 @@ window.triggerMpesa = async () => {
     }, 2500);
 };
 
-// --- NEW: GENERATE RANDOM CODE ---
-function generateOrderCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed 0, O, I, 1 to reduce confusion
-    let result = '';
-    for (let i = 0; i < 5; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-// --- UPDATED: FINALIZE ORDER ---
 async function finalizeOrder(mpesaNumber) {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const totalPrice = quantity * currentEggPrice;
     const item = "Tray of 30";
-    
-    // Generate the code
-    const deliveryCode = generateOrderCode();
 
     try {
         await addDoc(collection(db, "orders"), {
@@ -186,39 +161,36 @@ async function finalizeOrder(mpesaNumber) {
             status: 'Pending',
             mpesaNumber: mpesaNumber,
             address: userLocation.address,
-            deliveryCode: deliveryCode, // Save code to DB
             createdAt: new Date()
         });
         
-        await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
-        
-        // Show code to user
-        alert(`Payment Confirmed!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n\nPlease show this code to the rider.`);
-        
+        await createNotification(`Order Placed! ${quantity} Trays. Total: Ksh ${totalPrice}`);
+        alert(`Payment Confirmed! Order placed.`);
         window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
-        generateWhatsAppLink(quantity, totalPrice, userLocation.address, deliveryCode);
+        generateWhatsAppLink(quantity, totalPrice, userLocation.address);
     } catch(e) {
         alert("Error saving order: " + e.message);
     }
 }
 
-function generateWhatsAppLink(qty, total, loc, code) {
+function generateWhatsAppLink(qty, total, loc) {
     const btn = document.querySelector('.whatsapp-float');
-    const msg = `Hi EggMaster, I ordered ${qty} Trays (Ksh ${total}). Loc: ${loc}. Code: ${code}`;
+    const msg = `Hi EggMaster, I just ordered ${qty} Trays for Ksh ${total}. Location: ${loc}.`;
     if(btn) btn.href = `https://wa.me/254700000000?text=${encodeURIComponent(msg)}`;
 }
 
-// --- PROFILE EDITING ---
+// --- PROFILE EDITING (WITH GALLERY UPLOAD) ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
     document.getElementById('editNameInput').value = user.displayName || "";
-    document.getElementById('previewImg').style.display = 'none'; 
+    document.getElementById('previewImg').style.display = 'none'; // Reset preview
     document.getElementById('profile-modal').style.display = 'flex';
 };
 
 window.closeProfileModal = () => { document.getElementById('profile-modal').style.display = 'none'; };
 
+// Preview the selected image
 window.previewFile = () => {
     const file = document.getElementById('editPhotoFile').files[0];
     const preview = document.getElementById('previewImg');
@@ -240,16 +212,25 @@ window.saveProfile = async () => {
 
     try {
         let photoURL = auth.currentUser.photoURL;
+
+        // 1. Check if a new file is selected
         if(fileInput.files.length > 0) {
             const file = fileInput.files[0];
+            // Create a reference to 'profile_pics/USER_ID'
             const storageRef = ref(storage, `profile_pics/${auth.currentUser.uid}`);
+            
+            // Upload
             await uploadBytes(storageRef, file);
+            
+            // Get URL
             photoURL = await getDownloadURL(storageRef);
         }
 
+        // 2. Update Auth & Firestore
         await updateProfile(auth.currentUser, { displayName: name, photoURL: photoURL });
         await setDoc(doc(db, "users", auth.currentUser.uid), { name: name, photo: photoURL }, { merge: true });
         
+        // 3. UI Update
         document.getElementById('usernameDisplay').innerText = name;
         if(photoURL) document.getElementById('userPhoto').src = photoURL;
 
@@ -257,7 +238,7 @@ window.saveProfile = async () => {
         alert("Profile Updated Successfully!");
 
     } catch(e) {
-        alert("Error: " + e.message);
+        alert("Error: " + e.message + "\n(Did you enable Storage in Firebase Console?)");
         console.error(e);
     } finally {
         saveBtn.innerText = "Save Changes";
@@ -265,7 +246,7 @@ window.saveProfile = async () => {
     }
 };
 
-// --- SETTINGS & HELPERS ---
+// --- SETTINGS, LOCATION, NOTIFS (UNCHANGED) ---
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
@@ -401,15 +382,12 @@ function listenToOrders() {
         }
 
         docs.forEach(o => {
-            const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Code: ${o.deliveryCode}</small>` : '';
-            
             list.innerHTML += `
             <div class="mini-order" style="margin-bottom:10px;">
                 <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
                 <div class="details">
                     <h4>${o.quantity}x ${o.item}</h4>
                     <small>${o.status} • ${o.address}</small>
-                    ${codeHtml}
                 </div>
                 <span class="price">Ksh ${o.totalPrice}</span>
             </div>`;
@@ -429,3 +407,4 @@ const heroBtn = document.getElementById('heroOrderBtn');
 if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
+
