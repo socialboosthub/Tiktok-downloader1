@@ -23,51 +23,46 @@
             </div>
             <h1>EggMaster<span class="dot">.</span></h1>
             <p>Wholesale Supply (Min 30 Trays)</p>
+            
             <div class="login-actions">
                 <button id="google-login-btn" class="google-btn">
                     <i class="fa-brands fa-google"></i>
-                    Continue with Google
+                    Login (Normal)
                 </button>
                 
-                <button onclick="window.openAdminFlow()" style="margin-top:15px; background:none; border:none; color:#ffffffaa; font-size:12px; cursor:pointer; text-decoration:underline;">
-                    Admin Access
+                <button id="admin-login-btn" class="admin-entry-btn" onclick="document.getElementById('admin-modal').style.display='flex'">
+                    <i class="fa-solid fa-user-shield"></i>
+                    Login as Admin
                 </button>
             </div>
         </div>
     </div>
 
-    <div id="admin-flow-modal" class="modal-overlay">
-        <div class="modal-content" style="text-align: center;">
-            <div style="margin-bottom: 20px;">
-                <i class="fa-solid fa-user-shield" style="font-size: 30px; color: var(--primary);"></i>
-            </div>
+    <div id="admin-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="color: #0d47a1;">Admin Access</h3>
             
-            <div id="step-email">
-                <h3>Admin Login</h3>
-                <div class="input-group">
-                    <input type="email" id="adminEmailInput" placeholder="admin@gmail.com" style="text-align: center;">
-                </div>
-                <button class="save-btn" onclick="window.adminStepCheckEmail()" style="width:100%;">Next</button>
+            <div class="input-group">
+                <label>Admin Email</label>
+                <input type="email" id="adminEmail" placeholder="admin@gmail.com">
             </div>
 
-            <div id="step-pass" style="display:none;">
-                <h3 id="adminEmailDisplay"></h3>
-                <div class="input-group">
-                    <input type="password" id="adminPassInput" placeholder="Password" style="text-align: center;">
-                </div>
-                <button class="save-btn" onclick="window.adminStepCheckPass()" style="width:100%;">Next</button>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="adminPass" placeholder="Enter Password">
             </div>
 
-            <div id="step-code" style="display:none;">
-                <h3>Security Check</h3>
-                <p style="font-size: 12px; color: #666;">Enter the 7-digit security code</p>
-                <div class="input-group">
-                    <input type="password" id="adminCodeInput" placeholder="1-3-5..." maxlength="7" style="text-align: center; letter-spacing: 5px; font-weight: bold;">
-                </div>
-                <button id="finalAdminLoginBtn" class="save-btn" onclick="window.adminFinalLogin()" style="width:100%;">Login</button>
+            <div class="input-group">
+                <label>Security Code</label>
+                <input type="password" id="adminSecCode" placeholder="Enter Security Code" maxlength="7">
             </div>
 
-            <button class="cancel-btn" onclick="window.closeAdminFlow()" style="width:100%; margin-top:10px;">Cancel</button>
+            <div id="adminError" style="color:red; font-size:12px; margin-bottom:10px; display:none; text-align:center;"></div>
+
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="document.getElementById('admin-modal').style.display='none'">Cancel</button>
+                <button id="adminSubmitBtn" class="save-btn" style="background: #0d47a1; color: white;">Login</button>
+            </div>
         </div>
     </div>
 
@@ -78,17 +73,22 @@
             </div>
             <h3>Complete Payment</h3>
             <p style="font-size:13px; color:#666; text-align:center;">Enter your M-Pesa number to receive the payment prompt.</p>
+            
             <div class="input-group">
                 <label>Phone Number</label>
                 <input type="tel" id="mpesaNumber" placeholder="0712 345 678" maxlength="10">
             </div>
+            
             <div class="summary-box" style="background:#f0fcf4; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #c3e6cb;">
                 <div style="display:flex; justify-content:space-between; font-size:13px;">
                     <span>Total Amount:</span>
                     <strong style="color:#2d6a4f">Ksh <span id="mpesaTotalDisplay">0</span></strong>
                 </div>
             </div>
-            <button id="payBtn" class="save-btn" style="width:100%; background:#4CAF50; color:white;" onclick="window.triggerMpesa()">Pay Now</button>
+
+            <button id="payBtn" class="save-btn" style="width:100%; background:#4CAF50; color:white;" onclick="window.triggerMpesa()">
+                Pay Now
+            </button>
             <button class="cancel-btn" style="width:100%; margin-top:10px;" onclick="document.getElementById('mpesa-modal').style.display='none'">Cancel</button>
         </div>
     </div>
@@ -96,10 +96,12 @@
     <div id="profile-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Edit Profile</h3>
+            
             <div class="input-group">
                 <label>Full Name</label>
                 <input type="text" id="editNameInput" placeholder="Enter your name">
             </div>
+
             <div class="input-group">
                 <label>Profile Photo</label>
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -107,6 +109,7 @@
                     <input type="file" id="editPhotoFile" accept="image/*" onchange="window.previewFile()" style="font-size: 12px;">
                 </div>
             </div>
+
             <div class="modal-actions">
                 <button class="cancel-btn" onclick="window.closeProfileModal()">Cancel</button>
                 <button id="saveProfileBtn" class="save-btn" onclick="window.saveProfile()">Save Changes</button>
@@ -155,13 +158,21 @@
         <div class="stats-row">
             <div class="stat-card highlight">
                 <i class="fa-solid fa-basket-shopping"></i>
-                <div><b id="homeOrderCount">0</b><span data-i18n="statOrders">My Orders</span></div>
+                <div>
+                    <b id="homeOrderCount">0</b>
+                    <span data-i18n="statOrders">My Orders</span>
+                </div>
             </div>
         </div>
-        <div class="section-header"><h3 data-i18n="recentActivity">Recent Activity</h3></div>
+        <div class="section-header">
+            <h3 data-i18n="recentActivity">Recent Activity</h3>
+        </div>
         <div class="mini-order" id="homeRecentCard">
             <div class="icon-box"><i class="fa-solid fa-clock"></i></div>
-            <div class="details"><h4 id="recentItemName">No orders yet</h4><small id="recentStatusText">Start shopping today!</small></div>
+            <div class="details">
+                <h4 id="recentItemName">No orders yet</h4>
+                <small id="recentStatusText">Start shopping today!</small>
+            </div>
             <span class="price" id="recentPrice">--</span>
         </div>
     </section>
@@ -175,14 +186,20 @@
                     <h3 data-i18n="prodTray">Tray of 30</h3>
                     <div class="prod-desc">Fresh Kienyeji Eggs (Yellow Yolk)</div>
                     <div class="price-row"><span>Ksh</span> <span id="dynamicPriceDisplay">...</span> <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
+                    
                     <div class="warning-box" style="background:#fff3cd; color:#856404; padding:8px; border-radius:8px; font-size:11px; margin-bottom:10px;">
                         <i class="fa-solid fa-triangle-exclamation"></i> Minimum Order: 30 Trays
                     </div>
+
                     <div class="action-row">
                         <div class="qty-control">
-                            <button onclick="updateQty(-1)">-</button><span class="qty-display" id="shopQty">30</span><button onclick="updateQty(1)">+</button>
+                            <button onclick="updateQty(-1)">-</button>
+                            <span class="qty-display" id="shopQty">30</span>
+                            <button onclick="updateQty(1)">+</button>
                         </div>
-                        <button class="add-btn" onclick="window.initiateOrder()"><i class="fa-solid fa-cart-plus"></i> Buy Now</button>
+                        <button class="add-btn" onclick="window.initiateOrder()">
+                            <i class="fa-solid fa-cart-plus"></i> Buy Now
+                        </button>
                     </div>
                 </div>
             </div>
@@ -196,7 +213,9 @@
 
     <section id="notifications-page" class="page">
         <h2 class="page-title">Notifications</h2>
-        <div id="fullNotifList" class="notif-page-list"><p class="empty-msg">Loading notifications...</p></div>
+        <div id="fullNotifList" class="notif-page-list">
+            <p class="empty-msg">Loading notifications...</p>
+        </div>
     </section>
 
     <section id="settings" class="page">
@@ -210,7 +229,10 @@
             </div>
             <div class="setting-item clickable" onclick="window.initLocationFlow()">
                 <div class="icon-wrap color-green"><i class="fa-solid fa-location-dot"></i></div>
-                <div class="text"><div id="locationStatus">Delivery Address</div><small id="currentCoords">Tap to set location</small></div>
+                <div class="text">
+                    <div id="locationStatus">Delivery Address</div>
+                    <small id="currentCoords">Tap to set location</small>
+                </div>
                 <i class="fa-solid fa-chevron-right arrow"></i>
             </div>
         </div>
@@ -219,7 +241,10 @@
             <div class="setting-item">
                 <div class="icon-wrap color-orange"><i class="fa-solid fa-moon"></i></div>
                 <div class="text" data-i18n="setTheme">Dark Mode</div>
-                <label class="switch"><input type="checkbox" id="themeToggle" onchange="window.toggleTheme()"><span class="slider"></span></label>
+                <label class="switch">
+                    <input type="checkbox" id="themeToggle" onchange="window.toggleTheme()">
+                    <span class="slider"></span>
+                </label>
             </div>
             <div class="setting-item">
                 <div class="icon-wrap color-teal"><i class="fa-solid fa-globe"></i></div>

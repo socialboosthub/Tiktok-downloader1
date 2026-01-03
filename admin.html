@@ -74,26 +74,47 @@
         const SUPER_ADMIN = "ashrafsquad001@gmail.com";
         const MANAGER = "abdulraxmanxamza@gmail.com";
 
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                const email = user.email.toLowerCase();
-                
-                if (email === SUPER_ADMIN) {
-                    setupUI("SUPER");
-                    loadPrice();
-                    listenToAllOrders(true);
-                } else if (email === MANAGER) {
-                    setupUI("MANAGER");
-                    listenToAllOrders(false);
-                } else {
-                    accessDenied();
-                }
+        // CHECK SESSION (Prioritize Local Admin Login)
+        const localSession = JSON.parse(localStorage.getItem('eggAdminSession'));
+
+        if (localSession && localSession.email) {
+            // Using custom login
+            console.log("Logged in via Admin Code");
+            if (localSession.email === SUPER_ADMIN) {
+                setupUI("SUPER");
+                loadPrice();
+                listenToAllOrders(true);
+            } else if (localSession.email === MANAGER) {
+                setupUI("MANAGER");
+                listenToAllOrders(false);
             } else {
-                window.location.href = 'index.html';
+                accessDenied();
             }
-        });
+        } else {
+            // Fallback to Firebase Google Login
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    const email = user.email.toLowerCase();
+                    if (email === SUPER_ADMIN) {
+                        setupUI("SUPER");
+                        loadPrice();
+                        listenToAllOrders(true);
+                    } else if (email === MANAGER) {
+                        setupUI("MANAGER");
+                        listenToAllOrders(false);
+                    } else {
+                        accessDenied();
+                    }
+                } else {
+                    window.location.href = 'index.html';
+                }
+            });
+        }
 
         window.logoutAdmin = () => {
+            // Clear local custom session
+            localStorage.removeItem('eggAdminSession');
+            // Sign out of firebase if they used that
             signOut(auth).then(() => {
                 window.location.href = 'index.html';
             });
@@ -136,11 +157,14 @@
             const codeInput = prompt("Ask customer for the 5-char code and enter it here:");
             if (!codeInput) return;
 
+            // Get order data to check code
             const orderRef = doc(db, "orders", orderId);
             const orderSnap = await getDoc(orderRef);
 
             if (orderSnap.exists()) {
                 const realCode = orderSnap.data().deliveryCode;
+                
+                // Case insensitive check
                 if (realCode && codeInput.toUpperCase() === realCode) {
                     await updateDoc(orderRef, { status: 'Delivered' });
                     alert("✅ SUCCESS! Code matches. Order marked Delivered.");
@@ -168,11 +192,13 @@
                     let actionButtons = '';
                     
                     if (isPending) {
+                        // The Verify Button (For everyone)
                         actionButtons += `
                         <button class="btn-deliver" onclick="verifyDeliveryCode('${docSnap.id}')" style="background:#FF9800; color:black;">
                             <i class="fa-solid fa-key"></i> Verify Code
                         </button>`;
                         
+                        // Super Admin gets a "Force Deliver" button just in case
                         if (isSuperAdmin) {
                             actionButtons += `
                             <button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; font-size:10px; background:#999; border:none; color:white; padding:5px; border-radius:4px;">

@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithPopup, signInWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
@@ -33,109 +33,67 @@ const translations = {
     sw: { heroTitle: "Mayai Kwa Jumla", navShop: "Duka", navSettings: "Mipangilio", myOrders: "Oda Zangu", setTheme: "Giza", setLanguage: "Lugha", logout: "Ondoka", statOrders: "Oda Zangu", prodTray: "Tray ya 30", recentActivity: "Shughuli za Hivi Karibuni" }
 };
 
-// --- AUTH STATE HANDLER ---
+// --- AUTH HANDLER ---
 onAuthStateChanged(auth, async (user) => {
     const overlay = document.getElementById('login-overlay');
-    
     if (user) {
-        // If user is logged in, hide overlay
         if(overlay) overlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
-
-        // Check if this is an ADMIN
-        const email = user.email.toLowerCase();
-        if (email === "ashrafsquad001@gmail.com" || email === "abdulraxmanxamza@gmail.com") {
-            // It's an admin, send them to admin page
-            window.location.href = "admin.html";
-        } else {
-            // Normal user flow
-            updateUIWithUser(user);
-            await loadUserSettings();
-            fetchLivePrice(); 
-            listenToOrders();
-            listenToNotifications(); 
-        }
+        
+        // If it's an admin, we might want to redirect straight to admin.html if they aren't there
+        // But for now we load the UI settings
+        updateUIWithUser(user);
+        await loadUserSettings();
+        fetchLivePrice(); 
+        listenToOrders();
+        listenToNotifications(); 
     } else {
-        // No user logged in, show overlay
         if(overlay) overlay.style.display = 'flex';
         document.body.classList.add('not-logged-in');
     }
 });
 
-// --- ADMIN LOGIN FLOW (SEQUENTIAL) ---
-window.openAdminFlow = () => {
-    // Reset inputs
-    document.getElementById('adminEmailInput').value = "";
-    document.getElementById('adminPassInput').value = "";
-    document.getElementById('adminCodeInput').value = "";
-    
-    // Show Modal, Start at Step 1
-    document.getElementById('admin-flow-modal').style.display = 'flex';
-    document.getElementById('step-email').style.display = 'block';
-    document.getElementById('step-pass').style.display = 'none';
-    document.getElementById('step-code').style.display = 'none';
-};
+// --- UPDATED: UI LOGIC FOR ADMINS ---
+function updateUIWithUser(user) {
+    // 1. Update Name and Photo
+    if(document.getElementById('usernameDisplay')) 
+        document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
+    if(document.getElementById('userPhoto') && user.photoURL) 
+        document.getElementById('userPhoto').src = user.photoURL;
 
-window.closeAdminFlow = () => {
-    document.getElementById('admin-flow-modal').style.display = 'none';
-};
+    // 2. ROLE BASED BUTTONS
+    const email = user.email ? user.email.toLowerCase() : "";
+    const settingsList = document.querySelector('.settings-section'); 
 
-// Step 1: Check Email
-window.adminStepCheckEmail = () => {
-    const email = document.getElementById('adminEmailInput').value.trim().toLowerCase();
-    const allowedAdmins = ["ashrafsquad001@gmail.com", "abdulraxmanxamza@gmail.com"];
+    // Remove old button if exists
+    const oldBtn = document.getElementById('admin-entry-btn');
+    if(oldBtn) oldBtn.remove();
 
-    if (!allowedAdmins.includes(email)) {
-        alert("This email is not an Admin. Please login as a customer.");
-        window.closeAdminFlow();
-        return; // Stop here
+    if (settingsList) {
+        if (email === "ashrafsquad001@gmail.com") {
+            // SUPER ADMIN BUTTON
+            const adminBtn = document.createElement('div');
+            adminBtn.innerHTML = `
+                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e3f2fd; border-bottom: 1px solid #bbdefb;">
+                    <div class="icon-wrap" style="background: #2196F3; color: white;"><i class="fa-solid fa-crown"></i></div>
+                    <div class="text" style="color: #0d47a1; font-weight: 700;">Super Admin Panel</div>
+                    <i class="fa-solid fa-arrow-right arrow"></i>
+                </div>`;
+            settingsList.insertBefore(adminBtn, settingsList.firstChild);
+        } 
+        else if (email === "abdulraxmanxamza@gmail.com") {
+            // ORDER MANAGER BUTTON
+            const managerBtn = document.createElement('div');
+            managerBtn.innerHTML = `
+                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e8f5e9; border-bottom: 1px solid #c8e6c9;">
+                    <div class="icon-wrap" style="background: #4CAF50; color: white;"><i class="fa-solid fa-truck-fast"></i></div>
+                    <div class="text" style="color: #1b5e20; font-weight: 700;">Delivery Dashboard</div>
+                    <i class="fa-solid fa-arrow-right arrow"></i>
+                </div>`;
+            settingsList.insertBefore(managerBtn, settingsList.firstChild);
+        }
     }
-
-    // If valid, move to Step 2
-    document.getElementById('step-email').style.display = 'none';
-    document.getElementById('step-pass').style.display = 'block';
-    document.getElementById('adminEmailDisplay').innerText = email; // Show email so they know who they are logging in as
-};
-
-// Step 2: Check Password (Client side "Next", Validation happens at Firebase)
-window.adminStepCheckPass = () => {
-    const pass = document.getElementById('adminPassInput').value.trim();
-    if (!pass) return alert("Please enter password");
-
-    // Move to Step 3
-    document.getElementById('step-pass').style.display = 'none';
-    document.getElementById('step-code').style.display = 'block';
-};
-
-// Step 3: Check Code & Final Login
-window.adminFinalLogin = async () => {
-    const code = document.getElementById('adminCodeInput').value.trim();
-    const btn = document.getElementById('finalAdminLoginBtn');
-    
-    // 1. Check Security Code
-    if (code !== "1357911") {
-        return alert("Invalid Security Code! Access Denied.");
-    }
-
-    // 2. Perform Firebase Auth Login
-    const email = document.getElementById('adminEmailInput').value.trim();
-    const pass = document.getElementById('adminPassInput').value.trim();
-
-    btn.innerText = "Verifying...";
-    btn.disabled = true;
-
-    try {
-        await signInWithEmailAndPassword(auth, email, pass);
-        // Success! onAuthStateChanged will handle the redirect to admin.html
-    } catch (error) {
-        alert("Login Error: Incorrect Password."); // Vague error for security, or use error.message
-        btn.innerText = "Login";
-        btn.disabled = false;
-        // Send back to password step
-        document.getElementById('step-code').style.display = 'none';
-        document.getElementById('step-pass').style.display = 'block';
-    }
-};
+}
 
 // --- NORMAL CUSTOMER LOGIN ---
 window.handleLogin = async () => {
@@ -145,13 +103,65 @@ window.handleLogin = async () => {
 const loginBtn = document.getElementById('google-login-btn');
 if (loginBtn) loginBtn.onclick = window.handleLogin;
 
-// --- UI HELPERS ---
-function updateUIWithUser(user) {
-    if(document.getElementById('usernameDisplay')) 
-        document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
-    if(document.getElementById('userPhoto') && user.photoURL) 
-        document.getElementById('userPhoto').src = user.photoURL;
+
+// --- NEW: ADMIN LOGIN LOGIC (STRICT) ---
+const adminSubmitBtn = document.getElementById('adminSubmitBtn');
+if(adminSubmitBtn) {
+    adminSubmitBtn.onclick = async () => {
+        const emailInput = document.getElementById('adminEmail').value.trim().toLowerCase();
+        const passInput = document.getElementById('adminPass').value;
+        const codeInput = document.getElementById('adminSecCode').value;
+        const errorDiv = document.getElementById('adminError');
+
+        errorDiv.style.display = 'none';
+
+        // 1. Check Security Code
+        if (codeInput !== "1357911") {
+            errorDiv.innerText = "Invalid Security Code";
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        // 2. Validate Specific Email/Password Logic
+        let isValidCreds = false;
+
+        if (emailInput === "ashrafsquad001@gmail.com") {
+            if (passInput === "Ashraf.3691") isValidCreds = true;
+        } else if (emailInput === "abdulraxmanxamza@gmail.com") {
+            if (passInput === "Ahamza4066") isValidCreds = true;
+        } else {
+            errorDiv.innerText = "This email is not authorized as Admin.";
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        if (!isValidCreds) {
+            errorDiv.innerText = "Incorrect Password.";
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        // 3. If Valid Logic, Login to Firebase
+        // Note: You must enable "Email/Password" sign-in in Firebase Console 
+        // and create these users with these passwords for this to work.
+        adminSubmitBtn.disabled = true;
+        adminSubmitBtn.innerText = "Verifying...";
+
+        try {
+            await signInWithEmailAndPassword(auth, emailInput, passInput);
+            document.getElementById('admin-modal').style.display = 'none';
+            // Redirect to admin panel immediately
+            window.location.href = 'admin.html';
+        } catch (error) {
+            console.error(error);
+            errorDiv.innerText = "Auth Error: Ensure this user exists in Firebase Authentication.";
+            errorDiv.style.display = 'block';
+            adminSubmitBtn.disabled = false;
+            adminSubmitBtn.innerText = "Login";
+        }
+    };
 }
+
 
 // --- DYNAMIC PRICE ---
 async function fetchLivePrice() {
@@ -168,7 +178,7 @@ async function fetchLivePrice() {
     } catch(e) { console.error("Error fetching price", e); }
 }
 
-// --- ORDER LOGIC ---
+// --- ORDER & M-PESA LOGIC ---
 window.updateQty = (change) => {
     const display = document.getElementById('shopQty');
     let current = parseInt(display.innerText);
@@ -209,8 +219,9 @@ window.triggerMpesa = async () => {
     }, 2500);
 };
 
+// --- NEW: GENERATE RANDOM CODE ---
 function generateOrderCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed 0, O, I, 1 to reduce confusion
     let result = '';
     for (let i = 0; i < 5; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -218,10 +229,13 @@ function generateOrderCode() {
     return result;
 }
 
+// --- UPDATED: FINALIZE ORDER ---
 async function finalizeOrder(mpesaNumber) {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const totalPrice = quantity * currentEggPrice;
     const item = "Tray of 30";
+    
+    // Generate the code
     const deliveryCode = generateOrderCode();
 
     try {
@@ -235,12 +249,15 @@ async function finalizeOrder(mpesaNumber) {
             status: 'Pending',
             mpesaNumber: mpesaNumber,
             address: userLocation.address,
-            deliveryCode: deliveryCode, 
+            deliveryCode: deliveryCode, // Save code to DB
             createdAt: new Date()
         });
         
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
+        
+        // Show code to user
         alert(`Payment Confirmed!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n\nPlease show this code to the rider.`);
+        
         window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
         generateWhatsAppLink(quantity, totalPrice, userLocation.address, deliveryCode);
     } catch(e) {
@@ -254,7 +271,7 @@ function generateWhatsAppLink(qty, total, loc, code) {
     if(btn) btn.href = `https://wa.me/254700000000?text=${encodeURIComponent(msg)}`;
 }
 
-// --- PROFILE & SETTINGS ---
+// --- PROFILE EDITING ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
@@ -304,12 +321,14 @@ window.saveProfile = async () => {
 
     } catch(e) {
         alert("Error: " + e.message);
+        console.error(e);
     } finally {
         saveBtn.innerText = "Save Changes";
         saveBtn.disabled = false;
     }
 };
 
+// --- SETTINGS & HELPERS ---
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
@@ -446,6 +465,7 @@ function listenToOrders() {
 
         docs.forEach(o => {
             const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Code: ${o.deliveryCode}</small>` : '';
+            
             list.innerHTML += `
             <div class="mini-order" style="margin-bottom:10px;">
                 <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
