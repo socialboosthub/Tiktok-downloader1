@@ -3,59 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EggMaster Admin</title>
+    <title>Admin Panel</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
+        /* ADMIN SECURITY OVERLAY */
+        #security-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #fff; z-index: 99999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 30px; text-align: center;
+        }
+        .security-box { width: 100%; max-width: 350px; }
+        .sec-step { display: none; animation: fadeIn 0.3s ease; }
+        .sec-step.active { display: block; }
+        .sec-input {
+            width: 100%; padding: 15px; margin: 15px 0;
+            border: 2px solid #eee; border-radius: 12px; font-size: 16px; outline: none;
+        }
+        .sec-input:focus { border-color: #FFB300; }
+        .sec-btn {
+            background: #FFB300; color: #000; font-weight: bold;
+            width: 100%; padding: 15px; border: none; border-radius: 12px; cursor: pointer;
+        }
+        .error-msg { color: #F44336; font-size: 13px; margin-top: 10px; min-height: 20px; }
+        
+        /* REST OF ADMIN STYLES */
         .admin-container { max-width: 800px; margin: 0 auto; padding: 20px; }
         .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .price-editor { background: #E3F2FD; padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid #BBDEFB; }
         .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .order-header { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
-        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
-        .status-Pending { background: #FFF3E0; color: #E65100; }
-        .status-Delivered { background: #E8F5E9; color: #2E7D32; }
-        .admin-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-        .btn-deliver { background: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-        .btn-map { background: #2196F3; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .status-pending { background: #FFF3E0; color: #E65100; }
+        .status-delivered { background: #E8F5E9; color: #2E7D32; }
     </style>
 </head>
 <body>
 
-    <div class="admin-container">
-        <div class="admin-header">
-            <h2>Admin Dashboard</h2>
-            <button onclick="window.logoutAdmin()" style="padding:8px 12px; border:none; background:#ffcdd2; color:#b71c1c; border-radius:8px;">
-                <i class="fa-solid fa-right-from-bracket"></i> Logout
-            </button>
-        </div>
-
-        <div id="auth-check" style="text-align:center;">
-            <h3>Verifying Permissions...</h3>
-        </div>
-
-        <div id="admin-panel" style="display:none;">
+    <div id="security-overlay">
+        <div class="security-box">
+            <div style="font-size: 40px; color: #FFB300; margin-bottom: 20px;"><i class="fa-solid fa-user-shield"></i></div>
             
-            <div class="price-editor">
-                <h4><i class="fa-solid fa-tag"></i> Set Wholesale Price</h4>
-                <div style="display:flex; gap:10px; margin-top:10px;">
-                    <input type="number" id="adminPriceInput" style="padding:10px; border-radius:8px; border:1px solid #ccc; width:100px;">
-                    <button onclick="updateGlobalPrice()" style="padding:10px 20px; background:#1976D2; color:white; border:none; border-radius:8px; cursor:pointer;">Update Price</button>
-                </div>
-                <small style="color:#555;">Current customers will see this price immediately.</small>
+            <div id="step-1" class="sec-step active">
+                <h3>Admin Access</h3>
+                <p style="color:#666; font-size:14px;">Verify your identity</p>
+                <input type="email" id="adminEmail" class="sec-input" placeholder="Enter Admin Gmail">
+                <button class="sec-btn" onclick="checkEmail()">Next <i class="fa-solid fa-arrow-right"></i></button>
             </div>
 
-            <h3>Incoming Orders</h3>
-            <div id="adminOrdersList">Loading...</div>
+            <div id="step-2" class="sec-step">
+                <h3>Password</h3>
+                <p style="color:#666; font-size:14px;">Enter security password</p>
+                <input type="password" id="adminPass" class="sec-input" placeholder="Password">
+                <button class="sec-btn" onclick="checkPass()">Next <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+
+            <div id="step-3" class="sec-step">
+                <h3>Secret Code</h3>
+                <p style="color:#666; font-size:14px;">Enter the final pin</p>
+                <input type="number" id="adminCode" class="sec-input" placeholder="0000">
+                <button class="sec-btn" onclick="checkCode()">Login As Admin</button>
+            </div>
+
+            <div id="error-display" class="error-msg"></div>
+        </div>
+    </div>
+
+    <div class="admin-container" id="admin-content" style="display: none;">
+        <div class="admin-header">
+            <h2>Admin Dashboard</h2>
+            <button onclick="location.reload()" style="background:#eee; border:none; padding:10px; border-radius:8px;"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+
+        <div id="admin-orders-list">
+            <p>Loading orders...</p>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // CONFIG (Same as script.js)
         const firebaseConfig = {
             apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
             authDomain: "eggshop-702f6.firebaseapp.com",
@@ -67,170 +96,101 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- ROLE CONFIGURATION ---
-        const SUPER_ADMIN = "ashrafsquad001@gmail.com";
-        const MANAGER = "abdulraxmanxamza@gmail.com";
+        // --- SECURITY LOGIC (CHANGE THESE) ---
+        const CORRECT_EMAIL = "ashrafsquad001@gmail.com"; // CHANGE THIS
+        const CORRECT_PASS = "Ashraf.3691";             // CHANGE THIS
+        const CORRECT_CODE = "1357911";                  // CHANGE THIS
 
-        // CHECK SESSION (Prioritize Local Admin Login)
-        const localSession = JSON.parse(localStorage.getItem('eggAdminSession'));
-
-        if (localSession && localSession.email) {
-            // Using custom login
-            console.log("Logged in via Admin Code");
-            if (localSession.email === SUPER_ADMIN) {
-                setupUI("SUPER");
-                loadPrice();
-                listenToAllOrders(true);
-            } else if (localSession.email === MANAGER) {
-                setupUI("MANAGER");
-                listenToAllOrders(false);
-            } else {
-                accessDenied();
-            }
-        } else {
-            // Fallback to Firebase Google Login
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    const email = user.email.toLowerCase();
-                    if (email === SUPER_ADMIN) {
-                        setupUI("SUPER");
-                        loadPrice();
-                        listenToAllOrders(true);
-                    } else if (email === MANAGER) {
-                        setupUI("MANAGER");
-                        listenToAllOrders(false);
-                    } else {
-                        accessDenied();
-                    }
-                } else {
-                    window.location.href = 'index.html';
-                }
-            });
-        }
-
-        window.logoutAdmin = () => {
-            // Clear local custom session
-            localStorage.removeItem('eggAdminSession');
-            // Sign out of firebase if they used that
-            signOut(auth).then(() => {
-                window.location.href = 'index.html';
-            });
-        };
-
-        function setupUI(role) {
-            document.getElementById('auth-check').style.display = 'none';
-            document.getElementById('admin-panel').style.display = 'block';
+        window.checkEmail = () => {
+            const email = document.getElementById('adminEmail').value.trim();
+            const err = document.getElementById('error-display');
             
-            if(role === "MANAGER") {
-                // Hide price editor for the manager
-                document.querySelector('.price-editor').style.display = 'none';
-                document.querySelector('h2').innerText = "Delivery Dashboard";
-            }
-        }
-
-        function accessDenied() {
-            document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px; color:red;'>Access Denied.</h2><center><a href='index.html'>Go Back</a></center>";
-        }
-
-        // 1. MANAGE PRICE (Ashraf Only)
-        async function loadPrice() {
-            const docSnap = await getDoc(doc(db, "config", "pricing"));
-            if (docSnap.exists()) {
-                document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
+            if(email === CORRECT_EMAIL) {
+                document.getElementById('step-1').classList.remove('active');
+                document.getElementById('step-2').classList.add('active');
+                err.innerText = "";
             } else {
-                document.getElementById('adminPriceInput').value = 385; 
-            }
-        }
-
-        window.updateGlobalPrice = async () => {
-            const newPrice = parseInt(document.getElementById('adminPriceInput').value);
-            if(newPrice < 1) return alert("Invalid price");
-            await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
-            alert("Price updated to " + newPrice);
-        };
-
-        // 2. VERIFY CODE LOGIC
-        window.verifyDeliveryCode = async (orderId) => {
-            const codeInput = prompt("Ask customer for the 5-char code and enter it here:");
-            if (!codeInput) return;
-
-            // Get order data to check code
-            const orderRef = doc(db, "orders", orderId);
-            const orderSnap = await getDoc(orderRef);
-
-            if (orderSnap.exists()) {
-                const realCode = orderSnap.data().deliveryCode;
-                
-                // Case insensitive check
-                if (realCode && codeInput.toUpperCase() === realCode) {
-                    await updateDoc(orderRef, { status: 'Delivered' });
-                    alert("✅ SUCCESS! Code matches. Order marked Delivered.");
-                } else {
-                    alert("❌ ERROR! Code does not match. Do not release items.");
-                }
-            } else {
-                alert("Error: Order not found");
+                err.innerText = "Gmail is not correct";
+                // Don't show password field
             }
         };
 
-        // 3. VIEW ALL ORDERS
-        function listenToAllOrders(isSuperAdmin) {
-            const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+        window.checkPass = () => {
+            const pass = document.getElementById('adminPass').value;
+            const err = document.getElementById('error-display');
+
+            if(pass === CORRECT_PASS) {
+                document.getElementById('step-2').classList.remove('active');
+                document.getElementById('step-3').classList.add('active');
+                err.innerText = "";
+            } else {
+                err.innerText = "Wrong password";
+            }
+        };
+
+        window.checkCode = () => {
+            const code = document.getElementById('adminCode').value;
+            const err = document.getElementById('error-display');
+
+            if(code === CORRECT_CODE) {
+                document.getElementById('security-overlay').style.display = 'none';
+                document.getElementById('admin-content').style.display = 'block';
+                loadOrders(); // Load firebase data only after login
+            } else {
+                err.innerText = "Invalid Code";
+            }
+        };
+
+        // --- ADMIN DATA LOGIC ---
+        function loadOrders() {
+            const list = document.getElementById('admin-orders-list');
+            const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
             
-            onSnapshot(q, (snap) => {
-                const list = document.getElementById('adminOrdersList');
+            onSnapshot(q, (snapshot) => {
                 list.innerHTML = "";
-                
-                snap.forEach(docSnap => {
-                    const o = docSnap.data();
-                    const date = o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : new Date(o.createdAt).toLocaleString();
-                    const isPending = o.status === 'Pending';
+                if(snapshot.empty) { list.innerHTML = "<p>No orders found.</p>"; return; }
 
-                    let actionButtons = '';
+                snapshot.forEach(docSnap => {
+                    const o = docSnap.data();
+                    const id = docSnap.id;
+                    const date = o.timestamp ? new Date(o.timestamp.toDate()).toLocaleString() : 'N/A';
                     
-                    if (isPending) {
-                        // The Verify Button (For everyone)
-                        actionButtons += `
-                        <button class="btn-deliver" onclick="verifyDeliveryCode('${docSnap.id}')" style="background:#FF9800; color:black;">
-                            <i class="fa-solid fa-key"></i> Verify Code
-                        </button>`;
-                        
-                        // Super Admin gets a "Force Deliver" button just in case
-                        if (isSuperAdmin) {
-                            actionButtons += `
-                            <button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; font-size:10px; background:#999; border:none; color:white; padding:5px; border-radius:4px;">
-                                Force
-                            </button>`;
-                        }
+                    let statusClass = o.status === 'Delivered' ? 'status-delivered' : 'status-pending';
+                    
+                    // Logic for Action Buttons
+                    let actionButtons = '';
+                    if(o.status !== 'Delivered') {
+                        actionButtons = `
+                         <button onclick="window.markDeliveredForce('${id}')" style="background:#4CAF50; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; margin-right:5px;">
+                            <i class="fa-solid fa-check"></i> Delivered
+                         </button>
+                        `;
                     }
 
                     list.innerHTML += `
-                        <div class="order-card" style="border-left: 5px solid ${isPending ? '#FF9800' : '#4CAF50'}">
-                            <div class="order-header">
-                                <strong>#${docSnap.id.slice(0,5)}</strong>
-                                <span class="status-badge status-${o.status}">${o.status}</span>
+                        <div class="order-card">
+                            <div class="admin-header" style="margin-bottom:10px; border-bottom:1px solid #f0f0f0; padding-bottom:10px;">
+                                <strong>#${id.substr(0,5)}</strong>
+                                <span class="status-badge ${statusClass}">${o.status}</span>
                             </div>
-                            <div style="font-size:14px; margin-bottom:5px;">
-                                <b>${o.quantity} Trays</b> (${o.item}) <br>
-                                Total: Ksh ${o.totalPrice} <br>
-                                M-Pesa: ${o.mpesaNumber || 'N/A'}
+                            <div style="margin-bottom:10px;">
+                                <strong>${o.quantity}x ${o.item}</strong><br>
+                                <span style="color:#E65100; font-weight:bold;">Total: Ksh ${o.totalPrice}</span>
+                                ${o.deliveryCode ? `<br><small style="background:#eee; padding:2px 5px; border-radius:4px;">Code: <b>${o.deliveryCode}</b></small>` : ''}
                             </div>
                             <div style="font-size:12px; color:#666; margin-bottom:10px;">
                                 <i class="fa-solid fa-user"></i> ${o.userName || 'User'} <br>
                                 <i class="fa-solid fa-location-dot"></i> ${o.address} <br>
+                                <i class="fa-solid fa-phone"></i> ${o.mpesaNumber || 'N/A'} <br>
                                 <i class="fa-regular fa-clock"></i> ${date}
                             </div>
-                            <div class="admin-actions">
-                                <button class="btn-map" onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address + ', Mombasa')}')">
-                                    <i class="fa-solid fa-map-location-dot"></i> Map
-                                </button>
+                            <div style="display:flex; gap:10px;">
                                 ${actionButtons}
-                                <a href="https://wa.me/254${o.mpesaNumber ? o.mpesaNumber.substring(1) : ''}" target="_blank" class="btn-map" style="background:#25D366; text-decoration:none; display:inline-flex; align-items:center;">
-                                    <i class="fa-brands fa-whatsapp"></i> Chat
-                                </a>
+                                <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address + ', Mombasa')}')" style="background:#E3F2FD; color:#1976D2; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">
+                                    <i class="fa-solid fa-map"></i> Map
+                                </button>
                             </div>
                         </div>
                     `;
@@ -239,7 +199,7 @@
         }
 
         window.markDeliveredForce = async (id) => {
-            if(confirm("Force mark as delivered (Ignoring code)?")) {
+            if(confirm("Mark order as delivered?")) {
                 await updateDoc(doc(db, "orders", id), { status: 'Delivered' });
             }
         };
