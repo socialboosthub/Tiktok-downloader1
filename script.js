@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -40,8 +40,6 @@ onAuthStateChanged(auth, async (user) => {
         if(overlay) overlay.style.display = 'none';
         document.body.classList.remove('not-logged-in');
         
-        // If it's an admin, we might want to redirect straight to admin.html if they aren't there
-        // But for now we load the UI settings
         updateUIWithUser(user);
         await loadUserSettings();
         fetchLivePrice(); 
@@ -53,115 +51,20 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- UPDATED: UI LOGIC FOR ADMINS ---
 function updateUIWithUser(user) {
-    // 1. Update Name and Photo
     if(document.getElementById('usernameDisplay')) 
         document.getElementById('usernameDisplay').innerText = user.displayName || "Wholesaler";
     if(document.getElementById('userPhoto') && user.photoURL) 
         document.getElementById('userPhoto').src = user.photoURL;
-
-    // 2. ROLE BASED BUTTONS
-    const email = user.email ? user.email.toLowerCase() : "";
-    const settingsList = document.querySelector('.settings-section'); 
-
-    // Remove old button if exists
-    const oldBtn = document.getElementById('admin-entry-btn');
-    if(oldBtn) oldBtn.remove();
-
-    if (settingsList) {
-        if (email === "ashrafsquad001@gmail.com") {
-            // SUPER ADMIN BUTTON
-            const adminBtn = document.createElement('div');
-            adminBtn.innerHTML = `
-                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e3f2fd; border-bottom: 1px solid #bbdefb;">
-                    <div class="icon-wrap" style="background: #2196F3; color: white;"><i class="fa-solid fa-crown"></i></div>
-                    <div class="text" style="color: #0d47a1; font-weight: 700;">Super Admin Panel</div>
-                    <i class="fa-solid fa-arrow-right arrow"></i>
-                </div>`;
-            settingsList.insertBefore(adminBtn, settingsList.firstChild);
-        } 
-        else if (email === "abdulraxmanxamza@gmail.com") {
-            // ORDER MANAGER BUTTON
-            const managerBtn = document.createElement('div');
-            managerBtn.innerHTML = `
-                <div class="setting-item clickable" id="admin-entry-btn" onclick="window.location.href='admin.html'" style="background: #e8f5e9; border-bottom: 1px solid #c8e6c9;">
-                    <div class="icon-wrap" style="background: #4CAF50; color: white;"><i class="fa-solid fa-truck-fast"></i></div>
-                    <div class="text" style="color: #1b5e20; font-weight: 700;">Delivery Dashboard</div>
-                    <i class="fa-solid fa-arrow-right arrow"></i>
-                </div>`;
-            settingsList.insertBefore(managerBtn, settingsList.firstChild);
-        }
-    }
 }
 
-// --- NORMAL CUSTOMER LOGIN ---
+// --- NORMAL LOGIN ---
 window.handleLogin = async () => {
     try { await signInWithPopup(auth, provider); } 
     catch (error) { alert("Login Failed: " + error.message); }
 };
 const loginBtn = document.getElementById('google-login-btn');
 if (loginBtn) loginBtn.onclick = window.handleLogin;
-
-
-// --- NEW: ADMIN LOGIN LOGIC (STRICT) ---
-const adminSubmitBtn = document.getElementById('adminSubmitBtn');
-if(adminSubmitBtn) {
-    adminSubmitBtn.onclick = async () => {
-        const emailInput = document.getElementById('adminEmail').value.trim().toLowerCase();
-        const passInput = document.getElementById('adminPass').value;
-        const codeInput = document.getElementById('adminSecCode').value;
-        const errorDiv = document.getElementById('adminError');
-
-        errorDiv.style.display = 'none';
-
-        // 1. Check Security Code
-        if (codeInput !== "1357911") {
-            errorDiv.innerText = "Invalid Security Code";
-            errorDiv.style.display = 'block';
-            return;
-        }
-
-        // 2. Validate Specific Email/Password Logic
-        let isValidCreds = false;
-
-        if (emailInput === "ashrafsquad001@gmail.com") {
-            if (passInput === "Ashraf.3691") isValidCreds = true;
-        } else if (emailInput === "abdulraxmanxamza@gmail.com") {
-            if (passInput === "Ahamza4066") isValidCreds = true;
-        } else {
-            errorDiv.innerText = "This email is not authorized as Admin.";
-            errorDiv.style.display = 'block';
-            return;
-        }
-
-        if (!isValidCreds) {
-            errorDiv.innerText = "Incorrect Password.";
-            errorDiv.style.display = 'block';
-            return;
-        }
-
-        // 3. If Valid Logic, Login to Firebase
-        // Note: You must enable "Email/Password" sign-in in Firebase Console 
-        // and create these users with these passwords for this to work.
-        adminSubmitBtn.disabled = true;
-        adminSubmitBtn.innerText = "Verifying...";
-
-        try {
-            await signInWithEmailAndPassword(auth, emailInput, passInput);
-            document.getElementById('admin-modal').style.display = 'none';
-            // Redirect to admin panel immediately
-            window.location.href = 'admin.html';
-        } catch (error) {
-            console.error(error);
-            errorDiv.innerText = "Auth Error: Ensure this user exists in Firebase Authentication.";
-            errorDiv.style.display = 'block';
-            adminSubmitBtn.disabled = false;
-            adminSubmitBtn.innerText = "Login";
-        }
-    };
-}
-
 
 // --- DYNAMIC PRICE ---
 async function fetchLivePrice() {
@@ -178,7 +81,7 @@ async function fetchLivePrice() {
     } catch(e) { console.error("Error fetching price", e); }
 }
 
-// --- ORDER & M-PESA LOGIC ---
+// --- ORDER LOGIC ---
 window.updateQty = (change) => {
     const display = document.getElementById('shopQty');
     let current = parseInt(display.innerText);
@@ -219,9 +122,8 @@ window.triggerMpesa = async () => {
     }, 2500);
 };
 
-// --- NEW: GENERATE RANDOM CODE ---
 function generateOrderCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed 0, O, I, 1 to reduce confusion
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
     let result = '';
     for (let i = 0; i < 5; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -229,13 +131,10 @@ function generateOrderCode() {
     return result;
 }
 
-// --- UPDATED: FINALIZE ORDER ---
 async function finalizeOrder(mpesaNumber) {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const totalPrice = quantity * currentEggPrice;
     const item = "Tray of 30";
-    
-    // Generate the code
     const deliveryCode = generateOrderCode();
 
     try {
@@ -249,13 +148,12 @@ async function finalizeOrder(mpesaNumber) {
             status: 'Pending',
             mpesaNumber: mpesaNumber,
             address: userLocation.address,
-            deliveryCode: deliveryCode, // Save code to DB
+            deliveryCode: deliveryCode, 
             createdAt: new Date()
         });
         
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
         
-        // Show code to user
         alert(`Payment Confirmed!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n\nPlease show this code to the rider.`);
         
         window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
@@ -271,7 +169,7 @@ function generateWhatsAppLink(qty, total, loc, code) {
     if(btn) btn.href = `https://wa.me/254700000000?text=${encodeURIComponent(msg)}`;
 }
 
-// --- PROFILE EDITING ---
+// --- FIXED PROFILE EDITING ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
@@ -303,16 +201,30 @@ window.saveProfile = async () => {
 
     try {
         let photoURL = auth.currentUser.photoURL;
+        
+        // Try uploading photo if selected
         if(fileInput.files.length > 0) {
-            const file = fileInput.files[0];
-            const storageRef = ref(storage, `profile_pics/${auth.currentUser.uid}`);
-            await uploadBytes(storageRef, file);
-            photoURL = await getDownloadURL(storageRef);
+            try {
+                const file = fileInput.files[0];
+                const storageRef = ref(storage, `profile_pics/${auth.currentUser.uid}`);
+                await uploadBytes(storageRef, file);
+                photoURL = await getDownloadURL(storageRef);
+            } catch(photoError) {
+                console.warn("Photo upload failed (maybe storage rules), continuing with name update...", photoError);
+            }
         }
 
+        // Update Auth Profile
         await updateProfile(auth.currentUser, { displayName: name, photoURL: photoURL });
-        await setDoc(doc(db, "users", auth.currentUser.uid), { name: name, photo: photoURL }, { merge: true });
         
+        // Update Firestore Profile
+        await setDoc(doc(db, "users", auth.currentUser.uid), { 
+            name: name, 
+            photo: photoURL,
+            email: auth.currentUser.email
+        }, { merge: true });
+        
+        // Update UI
         document.getElementById('usernameDisplay').innerText = name;
         if(photoURL) document.getElementById('userPhoto').src = photoURL;
 
@@ -320,7 +232,7 @@ window.saveProfile = async () => {
         alert("Profile Updated Successfully!");
 
     } catch(e) {
-        alert("Error: " + e.message);
+        alert("Error updating profile: " + e.message);
         console.error(e);
     } finally {
         saveBtn.innerText = "Save Changes";
@@ -328,7 +240,7 @@ window.saveProfile = async () => {
     }
 };
 
-// --- SETTINGS & HELPERS ---
+// --- SETTINGS ---
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
