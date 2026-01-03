@@ -69,7 +69,7 @@
                 <h3>Secret Code</h3>
                 <p style="color:#666; font-size:14px;">Enter the final pin</p>
                 <input type="number" id="secCode" class="sec-input" placeholder="000000">
-                <button class="sec-btn" onclick="checkCode()">Login As Admin</button>
+                <button id="finalLoginBtn" class="sec-btn" onclick="checkCode()">Login As Admin</button>
             </div>
 
             <div id="error-display" class="error-msg"></div>
@@ -79,7 +79,7 @@
     <div class="admin-container" id="admin-panel" style="display:none;">
         <div class="admin-header">
             <h2 id="dashboardTitle">Admin Dashboard</h2>
-            <button onclick="window.location.href='index.html'" style="padding:8px 12px; border:none; background:#ffcdd2; color:#b71c1c; border-radius:8px;">
+            <button onclick="window.logoutAdmin()" style="padding:8px 12px; border:none; background:#ffcdd2; color:#b71c1c; border-radius:8px;">
                 <i class="fa-solid fa-right-from-bracket"></i> Exit
             </button>
         </div>
@@ -99,6 +99,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -112,9 +113,10 @@
         };
 
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- CREDENTIALS ---
+        // --- CREDENTIALS (Matches Firebase Users) ---
         const CREDENTIALS = {
             "ashrafsquad001@gmail.com": { pass: "Ashraf.3691", role: "SUPER" },
             "abdulraxmanxamza@gmail.com": { pass: "Ahamza4066", role: "MANAGER" }
@@ -124,7 +126,7 @@
         let currentEmail = "";
         let currentRole = "";
 
-        // --- SECURITY LOGIC ---
+        // --- STEP 1: CHECK EMAIL LOCALLY ---
         window.checkEmail = () => {
             const email = document.getElementById('secEmail').value.trim().toLowerCase();
             const err = document.getElementById('error-display');
@@ -140,6 +142,7 @@
             }
         };
 
+        // --- STEP 2: CHECK PASSWORD LOCALLY ---
         window.checkPass = () => {
             const pass = document.getElementById('secPass').value;
             const err = document.getElementById('error-display');
@@ -153,21 +156,44 @@
             }
         };
 
-        window.checkCode = () => {
+        // --- STEP 3: CHECK CODE & REAL LOGIN ---
+        window.checkCode = async () => {
             const code = document.getElementById('secCode').value;
             const err = document.getElementById('error-display');
+            const btn = document.getElementById('finalLoginBtn');
 
             if(code === MASTER_CODE) {
-                // Success!
-                document.getElementById('security-overlay').style.display = 'none';
-                document.getElementById('admin-panel').style.display = 'block';
-                initDashboard(currentRole);
+                // CODE IS CORRECT -> NOW LOG INTO FIREBASE
+                try {
+                    btn.innerText = "Authenticating...";
+                    btn.disabled = true;
+
+                    // This is the magic line that fixes the rules error:
+                    await signInWithEmailAndPassword(auth, currentEmail, CREDENTIALS[currentEmail].pass);
+
+                    // Login Success
+                    document.getElementById('security-overlay').style.display = 'none';
+                    document.getElementById('admin-panel').style.display = 'block';
+                    initDashboard(currentRole);
+
+                } catch (error) {
+                    console.error(error);
+                    err.innerText = "Firebase Error: " + error.code;
+                    btn.innerText = "Login As Admin";
+                    btn.disabled = false;
+                }
             } else {
                 err.innerText = "Invalid Code";
             }
         };
 
-        // --- ADMIN FUNCTIONS ---
+        window.logoutAdmin = () => {
+            signOut(auth).then(() => {
+                window.location.href = 'index.html';
+            });
+        };
+
+        // --- DASHBOARD FUNCTIONS ---
         function initDashboard(role) {
             loadOrders(role === "SUPER");
             if(role === "SUPER") {
@@ -179,6 +205,7 @@
         }
 
         async function loadPrice() {
+            // Wait a moment for auth to settle
             const docSnap = await getDoc(doc(db, "config", "pricing"));
             if (docSnap.exists()) {
                 document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
@@ -190,8 +217,13 @@
         window.updateGlobalPrice = async () => {
             const newPrice = parseInt(document.getElementById('adminPriceInput').value);
             if(newPrice < 1) return alert("Invalid price");
-            await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
-            alert("Price updated to " + newPrice);
+            
+            try {
+                await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
+                alert("Price updated to " + newPrice);
+            } catch (e) {
+                alert("Update failed: " + e.message);
+            }
         };
 
         window.verifyDeliveryCode = async (orderId) => {
@@ -225,9 +257,14 @@
                 const list = document.getElementById('adminOrdersList');
                 list.innerHTML = "";
                 
+                if(snap.empty) {
+                    list.innerHTML = "<p>No orders yet.</p>";
+                    return;
+                }
+
                 snap.forEach(docSnap => {
                     const o = docSnap.data();
-                    const date = o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : 'Date Error';
+                    const date = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : 'Just now';
                     const isPending = o.status === 'Pending';
                     const statusClass = o.status === 'Delivered' ? 'status-Delivered' : 'status-Pending';
 
@@ -267,9 +304,11 @@
                         </div>
                     `;
                 });
+            }, (error) => {
+                console.error("Error loading orders:", error);
+                list.innerHTML = `<p style="color:red;">Error loading orders: ${error.message}</p>`;
             });
         }
     </script>
 </body>
 </html>
-
