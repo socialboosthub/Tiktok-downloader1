@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel</title>
+    <title>EggMaster Admin</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
-        /* ADMIN SECURITY OVERLAY */
+        /* ADMIN SECURITY OVERLAY STYLES */
         #security-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #fff; z-index: 99999;
@@ -24,44 +24,51 @@
         }
         .sec-input:focus { border-color: #FFB300; }
         .sec-btn {
-            background: #FFB300; color: #000; font-weight: bold;
+            background: #0d47a1; color: white; font-weight: bold;
             width: 100%; padding: 15px; border: none; border-radius: 12px; cursor: pointer;
         }
-        .error-msg { color: #F44336; font-size: 13px; margin-top: 10px; min-height: 20px; }
+        .error-msg { color: #F44336; font-size: 13px; margin-top: 10px; min-height: 20px; font-weight: 600; }
         
-        /* REST OF ADMIN STYLES */
+        /* DASHBOARD STYLES */
         .admin-container { max-width: 800px; margin: 0 auto; padding: 20px; }
         .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .price-editor { background: #E3F2FD; padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid #BBDEFB; }
         .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-        .status-pending { background: #FFF3E0; color: #E65100; }
-        .status-delivered { background: #E8F5E9; color: #2E7D32; }
+        .order-header { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .status-Pending { background: #FFF3E0; color: #E65100; }
+        .status-Delivered { background: #E8F5E9; color: #2E7D32; }
+        .admin-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .btn-deliver { background: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .btn-map { background: #2196F3; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; }
     </style>
 </head>
 <body>
 
     <div id="security-overlay">
         <div class="security-box">
-            <div style="font-size: 40px; color: #FFB300; margin-bottom: 20px;"><i class="fa-solid fa-user-shield"></i></div>
+            <div style="font-size: 50px; color: #0d47a1; margin-bottom: 20px;">
+                <i class="fa-solid fa-user-shield"></i>
+            </div>
             
             <div id="step-1" class="sec-step active">
-                <h3>Admin Access</h3>
-                <p style="color:#666; font-size:14px;">Verify your identity</p>
-                <input type="email" id="adminEmail" class="sec-input" placeholder="Enter Admin Gmail">
+                <h3>Admin Verification</h3>
+                <p style="color:#666; font-size:14px;">Enter your Gmail</p>
+                <input type="email" id="secEmail" class="sec-input" placeholder="example@gmail.com">
                 <button class="sec-btn" onclick="checkEmail()">Next <i class="fa-solid fa-arrow-right"></i></button>
             </div>
 
             <div id="step-2" class="sec-step">
                 <h3>Password</h3>
                 <p style="color:#666; font-size:14px;">Enter security password</p>
-                <input type="password" id="adminPass" class="sec-input" placeholder="Password">
+                <input type="password" id="secPass" class="sec-input" placeholder="Password">
                 <button class="sec-btn" onclick="checkPass()">Next <i class="fa-solid fa-arrow-right"></i></button>
             </div>
 
             <div id="step-3" class="sec-step">
                 <h3>Secret Code</h3>
                 <p style="color:#666; font-size:14px;">Enter the final pin</p>
-                <input type="number" id="adminCode" class="sec-input" placeholder="0000">
+                <input type="number" id="secCode" class="sec-input" placeholder="000000">
                 <button class="sec-btn" onclick="checkCode()">Login As Admin</button>
             </div>
 
@@ -69,22 +76,31 @@
         </div>
     </div>
 
-    <div class="admin-container" id="admin-content" style="display: none;">
+    <div class="admin-container" id="admin-panel" style="display:none;">
         <div class="admin-header">
-            <h2>Admin Dashboard</h2>
-            <button onclick="location.reload()" style="background:#eee; border:none; padding:10px; border-radius:8px;"><i class="fa-solid fa-right-from-bracket"></i></button>
+            <h2 id="dashboardTitle">Admin Dashboard</h2>
+            <button onclick="window.location.href='index.html'" style="padding:8px 12px; border:none; background:#ffcdd2; color:#b71c1c; border-radius:8px;">
+                <i class="fa-solid fa-right-from-bracket"></i> Exit
+            </button>
         </div>
 
-        <div id="admin-orders-list">
-            <p>Loading orders...</p>
+        <div class="price-editor" id="priceEditor">
+            <h4><i class="fa-solid fa-tag"></i> Set Wholesale Price</h4>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input type="number" id="adminPriceInput" style="padding:10px; border-radius:8px; border:1px solid #ccc; width:100px;">
+                <button onclick="updateGlobalPrice()" style="padding:10px 20px; background:#1976D2; color:white; border:none; border-radius:8px; cursor:pointer;">Update Price</button>
+            </div>
+            <small style="color:#555;">Current customers will see this price immediately.</small>
         </div>
+
+        <h3>Incoming Orders</h3>
+        <div id="adminOrdersList">Loading...</div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // CONFIG (Same as script.js)
         const firebaseConfig = {
             apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
             authDomain: "eggshop-702f6.firebaseapp.com",
@@ -98,30 +114,37 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // --- SECURITY LOGIC (CHANGE THESE) ---
-        const CORRECT_EMAIL = "ashrafsquad001@gmail.com"; // CHANGE THIS
-        const CORRECT_PASS = "Ashraf.3691";             // CHANGE THIS
-        const CORRECT_CODE = "1357911";                  // CHANGE THIS
+        // --- CREDENTIALS ---
+        const CREDENTIALS = {
+            "ashrafsquad001@gmail.com": { pass: "Ashraf.3691", role: "SUPER" },
+            "abdulraxmanxamza@gmail.com": { pass: "Ahamza4066", role: "MANAGER" }
+        };
+        const MASTER_CODE = "1357911";
 
+        let currentEmail = "";
+        let currentRole = "";
+
+        // --- SECURITY LOGIC ---
         window.checkEmail = () => {
-            const email = document.getElementById('adminEmail').value.trim();
+            const email = document.getElementById('secEmail').value.trim().toLowerCase();
             const err = document.getElementById('error-display');
             
-            if(email === CORRECT_EMAIL) {
+            if(CREDENTIALS[email]) {
+                currentEmail = email;
+                currentRole = CREDENTIALS[email].role;
                 document.getElementById('step-1').classList.remove('active');
                 document.getElementById('step-2').classList.add('active');
                 err.innerText = "";
             } else {
                 err.innerText = "Gmail is not correct";
-                // Don't show password field
             }
         };
 
         window.checkPass = () => {
-            const pass = document.getElementById('adminPass').value;
+            const pass = document.getElementById('secPass').value;
             const err = document.getElementById('error-display');
 
-            if(pass === CORRECT_PASS) {
+            if(pass === CREDENTIALS[currentEmail].pass) {
                 document.getElementById('step-2').classList.remove('active');
                 document.getElementById('step-3').classList.add('active');
                 err.innerText = "";
@@ -131,78 +154,122 @@
         };
 
         window.checkCode = () => {
-            const code = document.getElementById('adminCode').value;
+            const code = document.getElementById('secCode').value;
             const err = document.getElementById('error-display');
 
-            if(code === CORRECT_CODE) {
+            if(code === MASTER_CODE) {
+                // Success!
                 document.getElementById('security-overlay').style.display = 'none';
-                document.getElementById('admin-content').style.display = 'block';
-                loadOrders(); // Load firebase data only after login
+                document.getElementById('admin-panel').style.display = 'block';
+                initDashboard(currentRole);
             } else {
                 err.innerText = "Invalid Code";
             }
         };
 
-        // --- ADMIN DATA LOGIC ---
-        function loadOrders() {
-            const list = document.getElementById('admin-orders-list');
-            const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
-            
-            onSnapshot(q, (snapshot) => {
-                list.innerHTML = "";
-                if(snapshot.empty) { list.innerHTML = "<p>No orders found.</p>"; return; }
+        // --- ADMIN FUNCTIONS ---
+        function initDashboard(role) {
+            loadOrders(role === "SUPER");
+            if(role === "SUPER") {
+                loadPrice();
+            } else {
+                document.getElementById('priceEditor').style.display = 'none';
+                document.getElementById('dashboardTitle').innerText = "Delivery Dashboard";
+            }
+        }
 
-                snapshot.forEach(docSnap => {
+        async function loadPrice() {
+            const docSnap = await getDoc(doc(db, "config", "pricing"));
+            if (docSnap.exists()) {
+                document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
+            } else {
+                document.getElementById('adminPriceInput').value = 385; 
+            }
+        }
+
+        window.updateGlobalPrice = async () => {
+            const newPrice = parseInt(document.getElementById('adminPriceInput').value);
+            if(newPrice < 1) return alert("Invalid price");
+            await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
+            alert("Price updated to " + newPrice);
+        };
+
+        window.verifyDeliveryCode = async (orderId) => {
+            const codeInput = prompt("Ask customer for the 5-char code:");
+            if (!codeInput) return;
+
+            const orderRef = doc(db, "orders", orderId);
+            const orderSnap = await getDoc(orderRef);
+
+            if (orderSnap.exists()) {
+                const realCode = orderSnap.data().deliveryCode;
+                if (realCode && codeInput.toUpperCase() === realCode) {
+                    await updateDoc(orderRef, { status: 'Delivered' });
+                    alert("✅ SUCCESS! Order marked Delivered.");
+                } else {
+                    alert("❌ ERROR! Code does not match.");
+                }
+            }
+        };
+
+        window.markDeliveredForce = async (id) => {
+            if(confirm("Force mark as delivered?")) {
+                await updateDoc(doc(db, "orders", id), { status: 'Delivered' });
+            }
+        };
+
+        function loadOrders(isSuper) {
+            const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+            
+            onSnapshot(q, (snap) => {
+                const list = document.getElementById('adminOrdersList');
+                list.innerHTML = "";
+                
+                snap.forEach(docSnap => {
                     const o = docSnap.data();
-                    const id = docSnap.id;
-                    const date = o.timestamp ? new Date(o.timestamp.toDate()).toLocaleString() : 'N/A';
-                    
-                    let statusClass = o.status === 'Delivered' ? 'status-delivered' : 'status-pending';
-                    
-                    // Logic for Action Buttons
-                    let actionButtons = '';
-                    if(o.status !== 'Delivered') {
-                        actionButtons = `
-                         <button onclick="window.markDeliveredForce('${id}')" style="background:#4CAF50; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; margin-right:5px;">
-                            <i class="fa-solid fa-check"></i> Delivered
-                         </button>
-                        `;
+                    const date = o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : 'Date Error';
+                    const isPending = o.status === 'Pending';
+                    const statusClass = o.status === 'Delivered' ? 'status-Delivered' : 'status-Pending';
+
+                    let buttons = '';
+                    if (isPending) {
+                        buttons += `<button class="btn-deliver" onclick="verifyDeliveryCode('${docSnap.id}')" style="background:#FF9800; color:black;"><i class="fa-solid fa-key"></i> Verify</button>`;
+                        if(isSuper) {
+                            buttons += `<button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; background:#999; color:white; border:none; padding:8px; border-radius:6px; font-size:12px;">Force</button>`;
+                        }
                     }
 
                     list.innerHTML += `
-                        <div class="order-card">
-                            <div class="admin-header" style="margin-bottom:10px; border-bottom:1px solid #f0f0f0; padding-bottom:10px;">
-                                <strong>#${id.substr(0,5)}</strong>
+                        <div class="order-card" style="border-left: 5px solid ${isPending ? '#FF9800' : '#4CAF50'}">
+                            <div class="order-header">
+                                <strong>#${docSnap.id.slice(0,5)}</strong>
                                 <span class="status-badge ${statusClass}">${o.status}</span>
                             </div>
-                            <div style="margin-bottom:10px;">
-                                <strong>${o.quantity}x ${o.item}</strong><br>
-                                <span style="color:#E65100; font-weight:bold;">Total: Ksh ${o.totalPrice}</span>
-                                ${o.deliveryCode ? `<br><small style="background:#eee; padding:2px 5px; border-radius:4px;">Code: <b>${o.deliveryCode}</b></small>` : ''}
+                            <div style="font-size:14px; margin-bottom:5px;">
+                                <b>${o.quantity} Trays</b> (${o.item}) <br>
+                                Total: Ksh ${o.totalPrice} <br>
+                                M-Pesa: ${o.mpesaNumber || 'N/A'}
                             </div>
                             <div style="font-size:12px; color:#666; margin-bottom:10px;">
                                 <i class="fa-solid fa-user"></i> ${o.userName || 'User'} <br>
                                 <i class="fa-solid fa-location-dot"></i> ${o.address} <br>
-                                <i class="fa-solid fa-phone"></i> ${o.mpesaNumber || 'N/A'} <br>
                                 <i class="fa-regular fa-clock"></i> ${date}
                             </div>
-                            <div style="display:flex; gap:10px;">
-                                ${actionButtons}
-                                <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address + ', Mombasa')}')" style="background:#E3F2FD; color:#1976D2; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">
-                                    <i class="fa-solid fa-map"></i> Map
+                            <div class="admin-actions">
+                                <button class="btn-map" onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address + ', Mombasa')}')">
+                                    <i class="fa-solid fa-map-location-dot"></i> Map
                                 </button>
+                                ${buttons}
+                                <a href="https://wa.me/254${o.mpesaNumber ? o.mpesaNumber.substring(1) : ''}" target="_blank" class="btn-map" style="background:#25D366; text-decoration:none; display:inline-flex; align-items:center;">
+                                    <i class="fa-brands fa-whatsapp"></i> Chat
+                                </a>
                             </div>
                         </div>
                     `;
                 });
             });
         }
-
-        window.markDeliveredForce = async (id) => {
-            if(confirm("Mark order as delivered?")) {
-                await updateDoc(doc(db, "orders", id), { status: 'Delivered' });
-            }
-        };
     </script>
 </body>
 </html>
+
