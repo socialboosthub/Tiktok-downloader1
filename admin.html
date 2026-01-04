@@ -84,16 +84,6 @@
             </button>
         </div>
 
-        
-        <div class="price-editor" style="background: #FFF9C4; border-color: #FBC02D;">
-    <h4><i class="fa-solid fa-robot"></i> Quick SMS Matcher</h4>
-    <textarea id="smsPaste" placeholder="Paste the M-Pesa SMS here..." style="width:100%; height:60px; margin-top:10px; border-radius:8px; border:1px solid #ccc;"></textarea>
-    <button onclick="autoMatchSMS()" style="width:100%; margin-top:10px; background:#F57F17; color:white; border:none; padding:10px; border-radius:8px; font-weight:bold;">
-        Process SMS & Auto-Pay Orders
-    </button>
-</div>
-
-        
         <div class="price-editor" id="priceEditor">
             <h4><i class="fa-solid fa-tag"></i> Set Wholesale Price</h4>
             <div style="display:flex; gap:10px; margin-top:10px;">
@@ -108,38 +98,6 @@
     </div>
 
     <script type="module">
-        window.autoMatchSMS = async () => {
-    const sms = document.getElementById('smsPaste').value;
-    // Regex to find Code (e.g. QKH...) and Amount (e.g. 11,500)
-    const codeMatch = sms.match(/[A-Z0-9]{10}/);
-    const amountMatch = sms.match(/Ksh([\d,]+)/);
-
-    if(!codeMatch || !amountMatch) return alert("Could not find Code or Amount in this SMS.");
-
-    const mpesaCode = codeMatch[0];
-    const amount = parseInt(amountMatch[1].replace(/,/g, ''));
-
-    // Search Firebase for an order with this code
-    const q = query(collection(db, "orders"), where("mpesaCode", "==", mpesaCode), where("status", "==", "Verifying"));
-    const querySnapshot = await getDocs(q);
-
-    if(querySnapshot.empty) {
-        alert("No pending order found with code: " + mpesaCode);
-    } else {
-        querySnapshot.forEach(async (orderDoc) => {
-            const orderData = orderDoc.data();
-            // Check if amount matches
-            if(orderData.submittedAmount === amount) {
-                await updateDoc(doc(db, "orders", orderDoc.id), { status: 'Paid' });
-                alert("✅ Matched! Order for " + orderData.userName + " marked as Paid.");
-                document.getElementById('smsPaste').value = "";
-            } else {
-                alert("⚠️ Code matches but Amount differs! SMS: " + amount + " vs User: " + orderData.submittedAmount);
-            }
-        });
-    }
-};
-
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";

@@ -102,57 +102,25 @@ window.initiateOrder = () => {
     document.getElementById('mpesa-modal').style.display = 'flex';
 };
 
-window.submitWithdrawal = async () => {
-    const code = document.getElementById('mpesaCodeInput').value.trim().toUpperCase();
-    const amountStr = document.getElementById('mpesaAmountInput').value.trim(); // Add this input to HTML
-    const btn = document.getElementById('confirmPayBtn');
+window.triggerMpesa = async () => {
+    const phone = document.getElementById('mpesaNumber').value;
+    const btn = document.getElementById('payBtn');
     
-    if(code.length < 10 || !amountStr) return alert("Please enter the Code and exact Amount paid.");
+    if(phone.length < 10) return alert("Please enter a valid M-Pesa number");
 
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Verifying...`;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Sending STK Push...`;
 
-    const qty = parseInt(document.getElementById('shopQty').innerText);
-    const expectedTotal = qty * currentEggPrice;
-
-    try {
-        // 1. Create the order as 'Verifying'
-        const orderRef = await addDoc(collection(db, "orders"), {
-            userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName,
-            quantity: qty,
-            totalPrice: expectedTotal,
-            submittedAmount: parseInt(amountStr),
-            mpesaCode: code,
-            status: 'Verifying',
-            createdAt: new Date()
-        });
-
-        // 2. AUTO-CHECK LOGIC: 
-        // We listen for a change. If the amount is correct, it turns to 'Paid'
-        const unsub = onSnapshot(doc(db, "orders", orderRef.id), (snap) => {
-            const data = snap.data();
-            if (data.status === 'Paid') {
-                unsub();
-                alert("✅ Payment Verified! Order is now active.");
-                document.getElementById('mpesa-modal').style.display = 'none';
-                window.showPage('orders');
-            } else if (data.status === 'Rejected') {
-                unsub();
-                alert("❌ Verification Failed: Amount or Code is incorrect.");
-                btn.disabled = false;
-            }
-        });
-
-        // Backup: If nothing happens in 30 seconds
-        setTimeout(() => { unsub(); btn.disabled = false; btn.innerText = "Retry Verification"; }, 30000);
-
-    } catch(e) {
-        alert("Error: " + e.message);
-        btn.disabled = false;
-    }
+    setTimeout(async () => {
+        btn.innerHTML = `<i class="fa-solid fa-mobile-screen"></i> Check your phone for PIN...`;
+        setTimeout(async () => {
+            await finalizeOrder(phone);
+            btn.disabled = false;
+            btn.innerHTML = "Pay Now";
+            document.getElementById('mpesa-modal').style.display = 'none';
+        }, 3000);
+    }, 2500);
 };
-
 
 function generateOrderCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
