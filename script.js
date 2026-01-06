@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -99,27 +99,69 @@ window.initiateOrder = () => {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const total = quantity * currentEggPrice;
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
+    document.getElementById('mpesaCodeInput').value = ""; // Clear previous
     document.getElementById('mpesa-modal').style.display = 'flex';
 };
 
-window.triggerMpesa = async () => {
-    const phone = document.getElementById('mpesaNumber').value;
+// --- NEW VERIFICATION LOGIC ---
+window.verifyPayment = async () => {
+    const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
     const btn = document.getElementById('payBtn');
     
-    if(phone.length < 10) return alert("Please enter a valid M-Pesa number");
+    // 1. Basic Validation
+    if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
+
+    const quantity = parseInt(document.getElementById('shopQty').innerText);
+    const expectedTotal = quantity * currentEggPrice;
 
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Sending STK Push...`;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying...`;
 
-    setTimeout(async () => {
-        btn.innerHTML = `<i class="fa-solid fa-mobile-screen"></i> Check your phone for PIN...`;
-        setTimeout(async () => {
-            await finalizeOrder(phone);
-            btn.disabled = false;
-            btn.innerHTML = "Pay Now";
+    try {
+        // 2. Query Firestore 'mpesa_payments' collection
+        // NOTE: This collection is populated by server.js when SMS comes in
+        const paymentsRef = collection(db, "mpesa_payments");
+        const docRef = doc(paymentsRef, codeInput);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+
+            // 3. Check if used
+            if (data.used) {
+                alert("This transaction code has already been used!");
+                btn.disabled = false;
+                btn.innerHTML = "Verify Payment";
+                return;
+            }
+
+            // 4. Check Amount (Allowing small difference of 1-5 bob maybe? But lets be strict for now)
+            if (data.amount < expectedTotal) {
+                alert(`Insufficient Amount! We received Ksh ${data.amount}, but order is Ksh ${expectedTotal}.`);
+                btn.disabled = false;
+                btn.innerHTML = "Verify Payment";
+                return;
+            }
+
+            // 5. SUCCESS! Mark as used and create order
+            await updateDoc(docRef, { used: true, usedBy: auth.currentUser.uid });
+            await finalizeOrder(codeInput); // Pass code to order
+            
             document.getElementById('mpesa-modal').style.display = 'none';
-        }, 3000);
-    }, 2500);
+
+        } else {
+            // Document does not exist yet (SMS hasn't arrived or code is wrong)
+            alert("Payment not found yet!\n\n1. Ensure you sent the money.\n2. Ensure the code matches the SMS.\n3. Wait 10 seconds for the system to update and try again.");
+            btn.disabled = false;
+            btn.innerHTML = "Verify Payment";
+        }
+
+    } catch (error) {
+        console.error(error);
+        alert("Verification Error: " + error.message);
+        btn.disabled = false;
+        btn.innerHTML = "Verify Payment";
+    }
 };
 
 function generateOrderCode() {
@@ -131,7 +173,7 @@ function generateOrderCode() {
     return result;
 }
 
-async function finalizeOrder(mpesaNumber) {
+async function finalizeOrder(mpesaCode) {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const totalPrice = quantity * currentEggPrice;
     const item = "Tray of 30";
@@ -146,7 +188,8 @@ async function finalizeOrder(mpesaNumber) {
             quantity, 
             totalPrice,
             status: 'Pending',
-            mpesaNumber: mpesaNumber,
+            mpesaNumber: "Verified via Code", // We don't need phone number if we have code
+            mpesaCode: mpesaCode, // Save the transaction code
             address: userLocation.address,
             deliveryCode: deliveryCode, 
             createdAt: new Date()
@@ -154,7 +197,7 @@ async function finalizeOrder(mpesaNumber) {
         
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
         
-        alert(`Payment Confirmed!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n\nPlease show this code to the rider.`);
+        alert(`Payment Verified Successfully!\n\nYOUR DELIVERY CODE: ${deliveryCode}`);
         
         window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
         generateWhatsAppLink(quantity, totalPrice, userLocation.address, deliveryCode);
@@ -210,7 +253,7 @@ window.saveProfile = async () => {
                 await uploadBytes(storageRef, file);
                 photoURL = await getDownloadURL(storageRef);
             } catch(photoError) {
-                console.warn("Photo upload failed (maybe storage rules), continuing with name update...", photoError);
+                console.warn("Photo upload failed, continuing with name update...", photoError);
             }
         }
 
