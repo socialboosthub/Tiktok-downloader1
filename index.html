@@ -9,16 +9,9 @@
     <link rel="stylesheet" href="style.css">
     <style>
         #stealth-admin-trigger {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px;
-            height: 20px;
-            background: rgba(255, 255, 255, 0.05); /* Almost invisible */
-            border-radius: 50%;
-            z-index: 10000;
-            cursor: pointer;
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 20px; height: 20px; background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%; z-index: 10000; cursor: pointer;
         }
     </style>
     <script type="module" src="script.js" defer></script>
@@ -37,14 +30,11 @@
             </div>
             <h1>EggMaster<span class="dot">.</span></h1>
             <p>Wholesale Supply (Min 30 Trays)</p>
-            
             <div class="login-actions">
                 <button id="google-login-btn" class="google-btn">
-                    <i class="fa-brands fa-google"></i>
-                    Login with Google
+                    <i class="fa-brands fa-google"></i> Login with Google
                 </button>
             </div>
-            
             <div id="stealth-admin-trigger" onclick="window.location.href='admin.html'"></div>
         </div>
     </div>
@@ -54,23 +44,23 @@
             <div style="text-align:center; margin-bottom:15px;">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" style="height:40px;" alt="M-Pesa">
             </div>
-            <h3>Complete Payment</h3>
-            <p style="font-size:13px; color:#666; text-align:center;">Enter your M-Pesa number.</p>
+            <h3>Payment Required</h3>
+            
+            <div style="background:#f9f9f9; padding:15px; border-radius:10px; font-size:13px; margin-bottom:15px; border:1px dashed #ccc;">
+                <p style="margin:0 0 5px;"><strong>1. Go to M-Pesa > Lipa na M-Pesa</strong></p>
+                <p style="margin:0 0 5px;"><strong>2. Buy Goods / Paybill</strong></p>
+                <p style="margin:0 0 5px;">Till: <strong>123456</strong> (Agent Name)</p>
+                <p style="margin:0;">Amount: <strong>Ksh <span id="mpesaTotalDisplay">0</span></strong></p>
+            </div>
             
             <div class="input-group">
-                <label>Phone Number</label>
-                <input type="tel" id="mpesaNumber" placeholder="0712 345 678" maxlength="10">
-            </div>
-            
-            <div class="summary-box" style="background:#f0fcf4; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #c3e6cb;">
-                <div style="display:flex; justify-content:space-between; font-size:13px;">
-                    <span>Total Amount:</span>
-                    <strong style="color:#2d6a4f">Ksh <span id="mpesaTotalDisplay">0</span></strong>
-                </div>
+                <label>Enter M-Pesa Transaction Code</label>
+                <input type="text" id="mpesaCodeInput" placeholder="e.g. QGH5..." style="text-transform:uppercase; letter-spacing: 2px; font-weight:bold; text-align:center;">
+                <small style="color:#666; font-size:10px; display:block; margin-top:5px;">Wait for the SMS, then copy the code here.</small>
             </div>
 
-            <button id="payBtn" class="save-btn" style="width:100%; background:#4CAF50; color:white;" onclick="window.triggerMpesa()">
-                Pay Now
+            <button id="payBtn" class="save-btn" style="width:100%; background:#4CAF50; color:white;" onclick="window.verifyPayment()">
+                Verify Payment
             </button>
             <button class="cancel-btn" style="width:100%; margin-top:10px;" onclick="document.getElementById('mpesa-modal').style.display='none'">Cancel</button>
         </div>
@@ -79,12 +69,10 @@
     <div id="profile-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Edit Profile</h3>
-            
             <div class="input-group">
                 <label>Full Name</label>
                 <input type="text" id="editNameInput" placeholder="Enter your name">
             </div>
-
             <div class="input-group">
                 <label>Profile Photo</label>
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -92,7 +80,6 @@
                     <input type="file" id="editPhotoFile" accept="image/*" onchange="window.previewFile()" style="font-size: 12px;">
                 </div>
             </div>
-
             <div class="modal-actions">
                 <button class="cancel-btn" onclick="window.closeProfileModal()">Cancel</button>
                 <button id="saveProfileBtn" class="save-btn" onclick="window.saveProfile()">Save Changes</button>
@@ -169,11 +156,9 @@
                     <h3 data-i18n="prodTray">Tray of 30</h3>
                     <div class="prod-desc">Fresh Kienyeji Eggs (Yellow Yolk)</div>
                     <div class="price-row"><span>Ksh</span> <span id="dynamicPriceDisplay">...</span> <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
-                    
                     <div class="warning-box" style="background:#fff3cd; color:#856404; padding:8px; border-radius:8px; font-size:11px; margin-bottom:10px;">
                         <i class="fa-solid fa-triangle-exclamation"></i> Minimum Order: 30 Trays
                     </div>
-
                     <div class="action-row">
                         <div class="qty-control">
                             <button onclick="updateQty(-1)">-</button>
@@ -219,7 +204,6 @@
                 <i class="fa-solid fa-chevron-right arrow"></i>
             </div>
         </div>
-        
         <div class="settings-section">
             <div class="settings-header">App Preferences</div>
             <div class="setting-item">
@@ -230,25 +214,6 @@
                     <span class="slider"></span>
                 </label>
             </div>
-            
-            <div class="setting-item">
-                <div class="icon-wrap color-purple"><i class="fa-solid fa-bell"></i></div>
-                <div class="text">Notifications</div>
-                <label class="switch">
-                    <input type="checkbox" checked id="notifToggle">
-                    <span class="slider"></span>
-                </label>
-            </div>
-
-             <div class="setting-item">
-                <div class="icon-wrap color-red"><i class="fa-solid fa-volume-high"></i></div>
-                <div class="text">Sound Effects</div>
-                <label class="switch">
-                    <input type="checkbox" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-
             <div class="setting-item">
                 <div class="icon-wrap color-teal"><i class="fa-solid fa-globe"></i></div>
                 <div class="text" data-i18n="setLanguage">Language</div>
@@ -257,13 +222,7 @@
                     <option value="sw">Kiswahili</option>
                 </select>
             </div>
-            
-            <div class="setting-item clickable" onclick="alert('Cache Cleared!')">
-                <div class="icon-wrap" style="background:#607D8B; color:white;"><i class="fa-solid fa-broom"></i></div>
-                <div class="text">Clear Cache</div>
-            </div>
         </div>
-        
         <button class="logout-btn" onclick="window.logoutUser()" data-i18n="logout" style="width: calc(100% - 48px); margin: 24px; padding: 15px; border-radius: 12px; border: none; background: #FFEBEE; color: #F44336; font-weight: 700;">Logout</button>
     </section>
 
