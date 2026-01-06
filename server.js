@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
 const serviceAccount = require('./serviceAccountKey.json');
 
-// Initialize Firebase Admin (Allows server to write to DB)
+// Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
@@ -13,27 +13,36 @@ const db = admin.firestore();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware to parse incoming JSON from the SMS App
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '/')));
 
-// --- 1. THE WEBHOOK (Where the SMS App sends data) ---
+// --- THE WEBHOOK ---
 app.post('/webhook/sms', async (req, res) => {
     try {
-        // Different apps send data differently. We look for 'message' or 'body'
+        console.log("--------------- NEW SMS RECEIVED ---------------");
+        
+        // 1. Get the message content safely
         const smsContent = req.body.message || req.body.body || req.body.text || "";
-        const sender = req.body.sender || req.body.from || "";
+        const sender = req.body.sender || req.body.from || "Unknown";
 
-        console.log("Received SMS:", smsContent);
+        console.log(`From: ${sender}`);
+        console.log(`Message: ${smsContent}`);
 
-        // Only process M-Pesa messages
-        if (!sender.toUpperCase().includes("MPESA")) {
-            return res.status(200).send("Not an M-Pesa message, ignored.");
+        // 2. CHECK: Is this an M-Pesa Message? (Relaxed check for testing)
+        // We check if it contains "Confirmed" AND "Ksh"
+        if (!smsContent.includes("Confirmed") || !smsContent.includes("Ksh")) {
+            console.log("❌ Ignored: Message does not look like M-Pesa.");
+            return res.status(200).send("Ignored");
         }
 
-        // --- EXTRACT DATA USING REGEX ---
-        // Regex looks for: 10-char code, and the Amount after "Ksh"
+        // 3. EXTRACT DATA (Improved Regex)
+        
+        // Find the 10-digit code (e.g., UA5KK2UVTQ)
+        // Looks for 10 uppercase letters/numbers at the very start
         const codeRegex = /^([A-Z0-9]{10})\s+Confirmed/i;
+        
+        // Find the Amount (e.g., Ksh19,000.00)
+        // Looks for 'Ksh', maybe a space, then numbers/commas/dots
         const amountRegex = /Ksh\s*([\d,]+(?:\.\d{2})?)/i;
 
         const codeMatch = smsContent.match(codeRegex);
@@ -41,32 +50,38 @@ app.post('/webhook/sms', async (req, res) => {
 
         if (codeMatch && amountMatch) {
             const code = codeMatch[1].toUpperCase();
-            // Remove commas from amount (e.g., 1,500 -> 1500)
-            const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+            
+            // Clean the amount: Remove commas (19,000 -> 19000)
+            let rawAmount = amountMatch[1].replace(/,/g, '');
+            const amount = parseFloat(rawAmount);
 
-            // SAVE TO FIREBASE
+            console.log(`✅ PARSED SUCCESS: Code=${code}, Amount=${amount}`);
+
+            // 4. SAVE TO FIREBASE
             await db.collection('mpesa_payments').doc(code).set({
                 code: code,
                 amount: amount,
                 fullMessage: smsContent,
-                used: false, // We mark true when an order is actually placed
+                originalSender: sender,
+                used: false,
                 timestamp: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            console.log(`Saved Payment: ${code} of Ksh ${amount}`);
+            console.log("💾 Saved to Database successfully.");
             return res.status(200).send("Payment Saved");
         } else {
-            console.log("Could not parse M-Pesa message");
+            console.log("❌ Parsing Failed: Regex didn't match code or amount.");
+            console.log("Debug Code Match:", codeMatch);
+            console.log("Debug Amount Match:", amountMatch);
             return res.status(200).send("Could not parse");
         }
 
     } catch (error) {
-        console.error("Webhook Error:", error);
+        console.error("🚨 Webhook Error:", error);
         res.status(500).send("Error");
     }
 });
 
-// Serve index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
