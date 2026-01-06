@@ -2,6 +2,7 @@ const express = require('express');
 const admin = require('firebase-admin');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const path = require('path'); // Added to help locate your HTML file
 
 // Initialize Firebase Admin
 var serviceAccount = require("./serviceAccountKey.json");
@@ -19,9 +20,15 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// --- THIS IS THE CHANGE ---
+// 1. Serve static files (css, js, images) from the current folder
+app.use(express.static(__dirname));
+
+// 2. Send the index.html file when someone opens the site
 app.get('/', (req, res) => {
-  res.status(200).send('Server is running active');
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
+// --------------------------
 
 // WEBHOOK: Handle Incoming SMS
 app.post('/webhook/sms', async (req, res) => {
