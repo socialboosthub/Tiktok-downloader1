@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -58,6 +58,7 @@ function updateUIWithUser(user) {
         document.getElementById('userPhoto').src = user.photoURL;
 }
 
+// --- NORMAL LOGIN ---
 window.handleLogin = async () => {
     try { await signInWithPopup(auth, provider); } 
     catch (error) { alert("Login Failed: " + error.message); }
@@ -71,6 +72,8 @@ async function fetchLivePrice() {
         onSnapshot(doc(db, "config", "pricing"), (doc) => {
             if (doc.exists()) {
                 currentEggPrice = doc.data().currentPrice || 385;
+            } else {
+                currentEggPrice = 385;
             }
             const priceDisplay = document.getElementById('dynamicPriceDisplay');
             if(priceDisplay) priceDisplay.innerText = currentEggPrice;
@@ -96,92 +99,60 @@ window.initiateOrder = () => {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const total = quantity * currentEggPrice;
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
-    document.getElementById('mpesaCodeInput').value = "";
     document.getElementById('mpesa-modal').style.display = 'flex';
 };
 
-// ==========================================
-// 🔥 VERIFICATION LOGIC (Fixes Deadlock)
-// ==========================================
-window.verifyPayment = async () => {
-    const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
-    const btn = document.getElementById('payBtn');
+window.submitWithdrawal = async () => {
+    const code = document.getElementById('mpesaCodeInput').value.trim().toUpperCase();
+    const amountStr = document.getElementById('mpesaAmountInput').value.trim(); // Add this input to HTML
+    const btn = document.getElementById('confirmPayBtn');
     
-    // 1. Basic Validation
-    if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
-
-    const quantity = parseInt(document.getElementById('shopQty').innerText);
-    const expectedTotal = quantity * currentEggPrice;
+    if(code.length < 10 || !amountStr) return alert("Please enter the Code and exact Amount paid.");
 
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking (20s)...`;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Verifying...`;
 
-    let attempts = 0;
-    const maxAttempts = 7; // Check for ~21 seconds (7 * 3s)
+    const qty = parseInt(document.getElementById('shopQty').innerText);
+    const expectedTotal = qty * currentEggPrice;
 
-    const pollLoop = setInterval(async () => {
-        attempts++;
-        console.log(`🔎 Check #${attempts} for code: ${codeInput}`);
+    try {
+        // 1. Create the order as 'Verifying'
+        const orderRef = await addDoc(collection(db, "orders"), {
+            userId: auth.currentUser.uid,
+            userName: auth.currentUser.displayName,
+            quantity: qty,
+            totalPrice: expectedTotal,
+            submittedAmount: parseInt(amountStr),
+            mpesaCode: code,
+            status: 'Verifying',
+            createdAt: new Date()
+        });
 
-        try {
-            // 2. CHECK DATABASE for the code
-            const docRef = doc(db, "mpesa_payments", codeInput);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-
-                // 3. STOP POLLING - FOUND IT
-                clearInterval(pollLoop);
-                
-                // 4. CHECK IF ALREADY USED
-                if (data.used) {
-                    alert("❌ This code has already been used!");
-                    resetBtn();
-                    return;
-                }
-
-                // 5. CHECK AMOUNT (Allow slightly less? No, exact or more)
-                if (data.amount < expectedTotal) {
-                    alert(`⚠️ Insufficient Amount! Order is Ksh ${expectedTotal}, but code is Ksh ${data.amount}.`);
-                    resetBtn();
-                    return;
-                }
-
-                // 6. SUCCESS! MARK AS USED
-                // We update it first so it can't be reused instantly
-                await updateDoc(docRef, { 
-                    used: true, 
-                    usedBy: auth.currentUser.uid,
-                    claimedAt: new Date()
-                });
-
-                // 7. CREATE ORDER
-                await finalizeOrder(codeInput, data.phone); 
+        // 2. AUTO-CHECK LOGIC: 
+        // We listen for a change. If the amount is correct, it turns to 'Paid'
+        const unsub = onSnapshot(doc(db, "orders", orderRef.id), (snap) => {
+            const data = snap.data();
+            if (data.status === 'Paid') {
+                unsub();
+                alert("✅ Payment Verified! Order is now active.");
                 document.getElementById('mpesa-modal').style.display = 'none';
-                resetBtn();
-
-            } else {
-                // NOT FOUND YET
-                if (attempts >= maxAttempts) {
-                    clearInterval(pollLoop);
-                    alert("❌ Payment not found yet.\n\n1. Ensure you received the M-Pesa SMS.\n2. Ensure the code matches exactly.\n3. Check your internet.");
-                    resetBtn();
-                }
+                window.showPage('orders');
+            } else if (data.status === 'Rejected') {
+                unsub();
+                alert("❌ Verification Failed: Amount or Code is incorrect.");
+                btn.disabled = false;
             }
-        } catch (err) {
-            clearInterval(pollLoop);
-            console.error(err);
-            alert("Connection Error. Please try again.");
-            resetBtn();
-        }
-    }, 3000); // Wait 3 seconds between checks
+        });
 
-    function resetBtn() {
+        // Backup: If nothing happens in 30 seconds
+        setTimeout(() => { unsub(); btn.disabled = false; btn.innerText = "Retry Verification"; }, 30000);
+
+    } catch(e) {
+        alert("Error: " + e.message);
         btn.disabled = false;
-        btn.innerHTML = "Verify Payment";
     }
 };
+
 
 function generateOrderCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
@@ -192,7 +163,7 @@ function generateOrderCode() {
     return result;
 }
 
-async function finalizeOrder(mpesaCode, phoneNumber) {
+async function finalizeOrder(mpesaNumber) {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const totalPrice = quantity * currentEggPrice;
     const item = "Tray of 30";
@@ -201,14 +172,13 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
     try {
         await addDoc(collection(db, "orders"), {
             userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || "Customer",
+            userName: auth.currentUser.displayName,
             item, 
             unitPrice: currentEggPrice, 
             quantity, 
             totalPrice,
             status: 'Pending',
-            mpesaNumber: phoneNumber || "Verified", 
-            mpesaCode: mpesaCode,
+            mpesaNumber: mpesaNumber,
             address: userLocation.address,
             deliveryCode: deliveryCode, 
             createdAt: new Date()
@@ -216,14 +186,12 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
         
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
         
-        // Show success and redirect
-        alert(`✅ Payment Verified!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n(Show this to the driver)`);
+        alert(`Payment Confirmed!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n\nPlease show this code to the rider.`);
+        
         window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
         generateWhatsAppLink(quantity, totalPrice, userLocation.address, deliveryCode);
-
     } catch(e) {
         alert("Error saving order: " + e.message);
-        console.error(e);
     }
 }
 
@@ -233,7 +201,7 @@ function generateWhatsAppLink(qty, total, loc, code) {
     if(btn) btn.href = `https://wa.me/254700000000?text=${encodeURIComponent(msg)}`;
 }
 
-// --- PROFILE & SETTINGS (Standard) ---
+// --- FIXED PROFILE EDITING ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
@@ -265,26 +233,46 @@ window.saveProfile = async () => {
 
     try {
         let photoURL = auth.currentUser.photoURL;
+        
+        // Try uploading photo if selected
         if(fileInput.files.length > 0) {
             try {
                 const file = fileInput.files[0];
                 const storageRef = ref(storage, `profile_pics/${auth.currentUser.uid}`);
                 await uploadBytes(storageRef, file);
                 photoURL = await getDownloadURL(storageRef);
-            } catch(photoError) { console.warn("Photo upload failed", photoError); }
+            } catch(photoError) {
+                console.warn("Photo upload failed (maybe storage rules), continuing with name update...", photoError);
+            }
         }
 
+        // Update Auth Profile
         await updateProfile(auth.currentUser, { displayName: name, photoURL: photoURL });
-        await setDoc(doc(db, "users", auth.currentUser.uid), { name: name, photo: photoURL, email: auth.currentUser.email }, { merge: true });
         
+        // Update Firestore Profile
+        await setDoc(doc(db, "users", auth.currentUser.uid), { 
+            name: name, 
+            photo: photoURL,
+            email: auth.currentUser.email
+        }, { merge: true });
+        
+        // Update UI
         document.getElementById('usernameDisplay').innerText = name;
         if(photoURL) document.getElementById('userPhoto').src = photoURL;
+
         window.closeProfileModal();
-        alert("Profile Updated!");
-    } catch(e) { alert("Error: " + e.message); } 
-    finally { saveBtn.innerText = "Save Changes"; saveBtn.disabled = false; }
+        alert("Profile Updated Successfully!");
+
+    } catch(e) {
+        alert("Error updating profile: " + e.message);
+        console.error(e);
+    } finally {
+        saveBtn.innerText = "Save Changes";
+        saveBtn.disabled = false;
+    }
 };
 
+// --- SETTINGS ---
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
@@ -320,7 +308,7 @@ window.changeLanguage = async (lang) => {
 };
 
 window.initLocationFlow = function() {
-    const choice = confirm("Use GPS for location?");
+    const choice = confirm("Use GPS to find your location automatically?\nCancel to search manually.");
     if (choice) {
         if (!navigator.geolocation) return window.openLocationSearch();
         navigator.geolocation.getCurrentPosition(
@@ -419,22 +407,20 @@ function listenToOrders() {
             if(document.getElementById('recentPrice')) document.getElementById('recentPrice').innerText = "Ksh " + last.totalPrice;
         }
 
-        if(list) {
-            list.innerHTML = "";
-            docs.forEach(o => {
-                const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Delivery Code: ${o.deliveryCode}</small>` : '';
-                list.innerHTML += `
-                <div class="mini-order" style="margin-bottom:10px;">
-                    <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
-                    <div class="details">
-                        <h4>${o.quantity}x ${o.item}</h4>
-                        <small>${o.status} • ${o.address}</small>
-                        ${codeHtml}
-                    </div>
-                    <span class="price">Ksh ${o.totalPrice}</span>
-                </div>`;
-            });
-        }
+        docs.forEach(o => {
+            const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Code: ${o.deliveryCode}</small>` : '';
+            
+            list.innerHTML += `
+            <div class="mini-order" style="margin-bottom:10px;">
+                <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
+                <div class="details">
+                    <h4>${o.quantity}x ${o.item}</h4>
+                    <small>${o.status} • ${o.address}</small>
+                    ${codeHtml}
+                </div>
+                <span class="price">Ksh ${o.totalPrice}</span>
+            </div>`;
+        });
     });
 }
 
