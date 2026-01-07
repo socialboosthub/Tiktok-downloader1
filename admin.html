@@ -116,7 +116,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- CREDENTIALS (Matches Firebase Users) ---
+        // --- CREDENTIALS (Local Check for UI Only, Real Check is Firebase) ---
         const CREDENTIALS = {
             "ashrafsquad001@gmail.com": { pass: "Ashraf.3691", role: "SUPER" },
             "abdulraxmanxamza@gmail.com": { pass: "Ahamza4066", role: "MANAGER" }
@@ -163,12 +163,11 @@
             const btn = document.getElementById('finalLoginBtn');
 
             if(code === MASTER_CODE) {
-                // CODE IS CORRECT -> NOW LOG INTO FIREBASE
                 try {
                     btn.innerText = "Authenticating...";
                     btn.disabled = true;
 
-                    // This is the magic line that fixes the rules error:
+                    // REAL FIREBASE LOGIN (Necessary for Rules)
                     await signInWithEmailAndPassword(auth, currentEmail, CREDENTIALS[currentEmail].pass);
 
                     // Login Success
@@ -205,7 +204,6 @@
         }
 
         async function loadPrice() {
-            // Wait a moment for auth to settle
             const docSnap = await getDoc(doc(db, "config", "pricing"));
             if (docSnap.exists()) {
                 document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
@@ -227,7 +225,7 @@
         };
 
         window.verifyDeliveryCode = async (orderId) => {
-            const codeInput = prompt("Ask customer for the 5-char code:");
+            const codeInput = prompt("Enter the 5-char code from Customer:");
             if (!codeInput) return;
 
             const orderRef = doc(db, "orders", orderId);
@@ -235,6 +233,7 @@
 
             if (orderSnap.exists()) {
                 const realCode = orderSnap.data().deliveryCode;
+                // Case insensitive check
                 if (realCode && codeInput.toUpperCase() === realCode) {
                     await updateDoc(orderRef, { status: 'Delivered' });
                     alert("✅ SUCCESS! Order marked Delivered.");
@@ -245,7 +244,7 @@
         };
 
         window.markDeliveredForce = async (id) => {
-            if(confirm("Force mark as delivered?")) {
+            if(confirm("Force mark as delivered? (Only for Managers)")) {
                 await updateDoc(doc(db, "orders", id), { status: 'Delivered' });
             }
         };
@@ -276,16 +275,18 @@
                         }
                     }
 
+                    // --- FIXED MAP LINK SYNTAX & ADDED DELIVERY CODE DISPLAY FOR ADMIN ---
                     list.innerHTML += `
                         <div class="order-card" style="border-left: 5px solid ${isPending ? '#FF9800' : '#4CAF50'}">
                             <div class="order-header">
                                 <strong>#${docSnap.id.slice(0,5)}</strong>
+                                <small style="background:#eee; padding:2px 6px; border-radius:4px; color:#555;">Code: <b>${o.deliveryCode}</b></small>
                                 <span class="status-badge ${statusClass}">${o.status}</span>
                             </div>
                             <div style="font-size:14px; margin-bottom:5px;">
                                 <b>${o.quantity} Trays</b> (${o.item}) <br>
                                 Total: Ksh ${o.totalPrice} <br>
-                                M-Pesa: ${o.mpesaNumber || 'N/A'}
+                                M-Pesa: ${o.mpesaNumber || 'N/A'} (Tx: ${o.mpesaCode})
                             </div>
                             <div style="font-size:12px; color:#666; margin-bottom:10px;">
                                 <i class="fa-solid fa-user"></i> ${o.userName || 'User'} <br>
@@ -293,11 +294,11 @@
                                 <i class="fa-regular fa-clock"></i> ${date}
                             </div>
                             <div class="admin-actions">
-                                <button class="btn-map" onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address + ', Mombasa')}')">
+                                <button class="btn-map" onclick="window.open(\`https://www.google.com/maps/search/?api=1&query=\${encodeURIComponent(o.address + ', Mombasa')}\`)">
                                     <i class="fa-solid fa-map-location-dot"></i> Map
                                 </button>
                                 ${buttons}
-                                <a href="https://wa.me/254${o.mpesaNumber ? o.mpesaNumber.substring(1) : ''}" target="_blank" class="btn-map" style="background:#25D366; text-decoration:none; display:inline-flex; align-items:center;">
+                                <a href="https://wa.me/254${o.mpesaNumber && o.mpesaNumber.length > 9 ? o.mpesaNumber.substring(o.mpesaNumber.length - 9) : ''}" target="_blank" class="btn-map" style="background:#25D366; text-decoration:none; display:inline-flex; align-items:center;">
                                     <i class="fa-brands fa-whatsapp"></i> Chat
                                 </a>
                             </div>

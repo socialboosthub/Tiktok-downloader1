@@ -58,7 +58,6 @@ function updateUIWithUser(user) {
         document.getElementById('userPhoto').src = user.photoURL;
 }
 
-// --- NORMAL LOGIN ---
 window.handleLogin = async () => {
     try { await signInWithPopup(auth, provider); } 
     catch (error) { alert("Login Failed: " + error.message); }
@@ -72,8 +71,6 @@ async function fetchLivePrice() {
         onSnapshot(doc(db, "config", "pricing"), (doc) => {
             if (doc.exists()) {
                 currentEggPrice = doc.data().currentPrice || 385;
-            } else {
-                currentEggPrice = 385;
             }
             const priceDisplay = document.getElementById('dynamicPriceDisplay');
             if(priceDisplay) priceDisplay.innerText = currentEggPrice;
@@ -99,11 +96,13 @@ window.initiateOrder = () => {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const total = quantity * currentEggPrice;
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
-    document.getElementById('mpesaCodeInput').value = ""; // Clear previous
+    document.getElementById('mpesaCodeInput').value = "";
     document.getElementById('mpesa-modal').style.display = 'flex';
 };
 
-// --- NEW VERIFICATION LOGIC ---
+// ==========================================
+// 🔥 VERIFICATION LOGIC (Fixes Deadlock)
+// ==========================================
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
     const btn = document.getElementById('payBtn');
@@ -115,50 +114,70 @@ window.verifyPayment = async () => {
     const expectedTotal = quantity * currentEggPrice;
 
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying...`;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking (20s)...`;
 
-    try {
-        // 2. Query Firestore 'mpesa_payments' collection
-        // NOTE: This collection is populated by server.js when SMS comes in
-        const paymentsRef = collection(db, "mpesa_payments");
-        const docRef = doc(paymentsRef, codeInput);
-        const docSnap = await getDoc(docRef);
+    let attempts = 0;
+    const maxAttempts = 7; // Check for ~21 seconds (7 * 3s)
 
-        if (docSnap.exists()) {
-            const data = docSnap.data();
+    const pollLoop = setInterval(async () => {
+        attempts++;
+        console.log(`🔎 Check #${attempts} for code: ${codeInput}`);
 
-            // 3. Check if used
-            if (data.used) {
-                alert("This transaction code has already been used!");
-                btn.disabled = false;
-                btn.innerHTML = "Verify Payment";
-                return;
+        try {
+            // 2. CHECK DATABASE for the code
+            const docRef = doc(db, "mpesa_payments", codeInput);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+
+                // 3. STOP POLLING - FOUND IT
+                clearInterval(pollLoop);
+                
+                // 4. CHECK IF ALREADY USED
+                if (data.used) {
+                    alert("❌ This code has already been used!");
+                    resetBtn();
+                    return;
+                }
+
+                // 5. CHECK AMOUNT (Allow slightly less? No, exact or more)
+                if (data.amount < expectedTotal) {
+                    alert(`⚠️ Insufficient Amount! Order is Ksh ${expectedTotal}, but code is Ksh ${data.amount}.`);
+                    resetBtn();
+                    return;
+                }
+
+                // 6. SUCCESS! MARK AS USED
+                // We update it first so it can't be reused instantly
+                await updateDoc(docRef, { 
+                    used: true, 
+                    usedBy: auth.currentUser.uid,
+                    claimedAt: new Date()
+                });
+
+                // 7. CREATE ORDER
+                await finalizeOrder(codeInput, data.phone); 
+                document.getElementById('mpesa-modal').style.display = 'none';
+                resetBtn();
+
+            } else {
+                // NOT FOUND YET
+                if (attempts >= maxAttempts) {
+                    clearInterval(pollLoop);
+                    alert("❌ Payment not found yet.\n\n1. Ensure you received the M-Pesa SMS.\n2. Ensure the code matches exactly.\n3. Check your internet.");
+                    resetBtn();
+                }
             }
-
-            // 4. Check Amount (Allowing small difference of 1-5 bob maybe? But lets be strict for now)
-            if (data.amount < expectedTotal) {
-                alert(`Insufficient Amount! We received Ksh ${data.amount}, but order is Ksh ${expectedTotal}.`);
-                btn.disabled = false;
-                btn.innerHTML = "Verify Payment";
-                return;
-            }
-
-            // 5. SUCCESS! Mark as used and create order
-            await updateDoc(docRef, { used: true, usedBy: auth.currentUser.uid });
-            await finalizeOrder(codeInput); // Pass code to order
-            
-            document.getElementById('mpesa-modal').style.display = 'none';
-
-        } else {
-            // Document does not exist yet (SMS hasn't arrived or code is wrong)
-            alert("Payment not found yet!\n\n1. Ensure you sent the money.\n2. Ensure the code matches the SMS.\n3. Wait 10 seconds for the system to update and try again.");
-            btn.disabled = false;
-            btn.innerHTML = "Verify Payment";
+        } catch (err) {
+            clearInterval(pollLoop);
+            console.error(err);
+            alert("Connection Error. Please try again.");
+            resetBtn();
         }
+    }, 3000); // Wait 3 seconds between checks
 
-    } catch (error) {
-        console.error(error);
-        alert("Verification Error: " + error.message);
+    function resetBtn() {
         btn.disabled = false;
         btn.innerHTML = "Verify Payment";
     }
@@ -173,7 +192,7 @@ function generateOrderCode() {
     return result;
 }
 
-async function finalizeOrder(mpesaCode) {
+async function finalizeOrder(mpesaCode, phoneNumber) {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const totalPrice = quantity * currentEggPrice;
     const item = "Tray of 30";
@@ -182,14 +201,14 @@ async function finalizeOrder(mpesaCode) {
     try {
         await addDoc(collection(db, "orders"), {
             userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName,
+            userName: auth.currentUser.displayName || "Customer",
             item, 
             unitPrice: currentEggPrice, 
             quantity, 
             totalPrice,
             status: 'Pending',
-            mpesaNumber: "Verified via Code", // We don't need phone number if we have code
-            mpesaCode: mpesaCode, // Save the transaction code
+            mpesaNumber: phoneNumber || "Verified", 
+            mpesaCode: mpesaCode,
             address: userLocation.address,
             deliveryCode: deliveryCode, 
             createdAt: new Date()
@@ -197,12 +216,14 @@ async function finalizeOrder(mpesaCode) {
         
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
         
-        alert(`Payment Verified Successfully!\n\nYOUR DELIVERY CODE: ${deliveryCode}`);
-        
+        // Show success and redirect
+        alert(`✅ Payment Verified!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n(Show this to the driver)`);
         window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
         generateWhatsAppLink(quantity, totalPrice, userLocation.address, deliveryCode);
+
     } catch(e) {
         alert("Error saving order: " + e.message);
+        console.error(e);
     }
 }
 
@@ -212,7 +233,7 @@ function generateWhatsAppLink(qty, total, loc, code) {
     if(btn) btn.href = `https://wa.me/254700000000?text=${encodeURIComponent(msg)}`;
 }
 
-// --- FIXED PROFILE EDITING ---
+// --- PROFILE & SETTINGS (Standard) ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
@@ -244,46 +265,26 @@ window.saveProfile = async () => {
 
     try {
         let photoURL = auth.currentUser.photoURL;
-        
-        // Try uploading photo if selected
         if(fileInput.files.length > 0) {
             try {
                 const file = fileInput.files[0];
                 const storageRef = ref(storage, `profile_pics/${auth.currentUser.uid}`);
                 await uploadBytes(storageRef, file);
                 photoURL = await getDownloadURL(storageRef);
-            } catch(photoError) {
-                console.warn("Photo upload failed, continuing with name update...", photoError);
-            }
+            } catch(photoError) { console.warn("Photo upload failed", photoError); }
         }
 
-        // Update Auth Profile
         await updateProfile(auth.currentUser, { displayName: name, photoURL: photoURL });
+        await setDoc(doc(db, "users", auth.currentUser.uid), { name: name, photo: photoURL, email: auth.currentUser.email }, { merge: true });
         
-        // Update Firestore Profile
-        await setDoc(doc(db, "users", auth.currentUser.uid), { 
-            name: name, 
-            photo: photoURL,
-            email: auth.currentUser.email
-        }, { merge: true });
-        
-        // Update UI
         document.getElementById('usernameDisplay').innerText = name;
         if(photoURL) document.getElementById('userPhoto').src = photoURL;
-
         window.closeProfileModal();
-        alert("Profile Updated Successfully!");
-
-    } catch(e) {
-        alert("Error updating profile: " + e.message);
-        console.error(e);
-    } finally {
-        saveBtn.innerText = "Save Changes";
-        saveBtn.disabled = false;
-    }
+        alert("Profile Updated!");
+    } catch(e) { alert("Error: " + e.message); } 
+    finally { saveBtn.innerText = "Save Changes"; saveBtn.disabled = false; }
 };
 
-// --- SETTINGS ---
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
@@ -319,7 +320,7 @@ window.changeLanguage = async (lang) => {
 };
 
 window.initLocationFlow = function() {
-    const choice = confirm("Use GPS to find your location automatically?\nCancel to search manually.");
+    const choice = confirm("Use GPS for location?");
     if (choice) {
         if (!navigator.geolocation) return window.openLocationSearch();
         navigator.geolocation.getCurrentPosition(
@@ -418,20 +419,22 @@ function listenToOrders() {
             if(document.getElementById('recentPrice')) document.getElementById('recentPrice').innerText = "Ksh " + last.totalPrice;
         }
 
-        docs.forEach(o => {
-            const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Code: ${o.deliveryCode}</small>` : '';
-            
-            list.innerHTML += `
-            <div class="mini-order" style="margin-bottom:10px;">
-                <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
-                <div class="details">
-                    <h4>${o.quantity}x ${o.item}</h4>
-                    <small>${o.status} • ${o.address}</small>
-                    ${codeHtml}
-                </div>
-                <span class="price">Ksh ${o.totalPrice}</span>
-            </div>`;
-        });
+        if(list) {
+            list.innerHTML = "";
+            docs.forEach(o => {
+                const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Delivery Code: ${o.deliveryCode}</small>` : '';
+                list.innerHTML += `
+                <div class="mini-order" style="margin-bottom:10px;">
+                    <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
+                    <div class="details">
+                        <h4>${o.quantity}x ${o.item}</h4>
+                        <small>${o.status} • ${o.address}</small>
+                        ${codeHtml}
+                    </div>
+                    <span class="price">Ksh ${o.totalPrice}</span>
+                </div>`;
+            });
+        }
     });
 }
 

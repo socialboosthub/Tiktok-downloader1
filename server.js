@@ -1,109 +1,105 @@
 const express = require('express');
-const path = require('path');
-const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
-const serviceAccount = require('./serviceAccountKey.json');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const path = require('path');
 
-// Initialize Firebase
+// Initialize Firebase Admin
+// Make sure serviceAccountKey.json is in the same folder
+var serviceAccount = require("./serviceAccountKey.json");
+
 if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-    });
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
 }
+
 const db = admin.firestore();
-
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// --- FIX 1: ACCEPT ALL DATA FORMATS ---
+app.use(cors());
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true })); 
-app.use(express.static(path.join(__dirname, '/')));
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// --- THE WEBHOOK ---
-app.post('/webhook/sms', async (req, res) => {
-    try {
-        console.log("\n==================== INCOMING REQUEST ====================");
-        
-        // --- DEBUG: SEE EXACTLY WHAT THE APP SENT ---
-        console.log("RAW BODY:", JSON.stringify(req.body, null, 2));
+// Serve static files (Frontend)
+app.use(express.static(__dirname));
 
-        // 1. Get the message content (Try every possible field name)
-        // Some apps use 'message', some 'text', some 'content', some 'body'
-        let smsContent = req.body.message || req.body.body || req.body.text || req.body.content || req.body.msg || "";
-        
-        // If smsContent is still empty, check if the app sent the message as a key
-        if (!smsContent && typeof req.body === 'string') {
-            smsContent = req.body;
-        }
-
-        const sender = req.body.sender || req.body.from || req.body.phone || "Unknown";
-
-        console.log(`> Sender: ${sender}`);
-        console.log(`> Content: "${smsContent}"`);
-
-        if (!smsContent) {
-            console.log("❌ ERROR: No SMS content found in request.");
-            return res.status(400).send("No content received");
-        }
-
-        // 2. CHECK: Is it M-Pesa? (Check for 'Confirmed' keyword)
-        if (!smsContent.toLowerCase().includes("confirmed")) {
-            console.log("⚠️ Ignored: Message does not contain 'Confirmed'.");
-            return res.status(200).send("Ignored");
-        }
-
-        // 3. EXTRACT DATA (BULLETPROOF REGEX)
-        
-        // FIX 2: Removed '^' anchor. Finds 10-digit code anywhere in text.
-        // Example: "Fwd: UA5KK..." works now.
-        const codeRegex = /([A-Z0-9]{10})\s+Confirmed/i;
-        
-        // Looks for 'Ksh' followed by numbers, ignoring spaces or weird chars
-        const amountRegex = /Ksh\s*([\d,]+)/i;
-
-        const codeMatch = smsContent.match(codeRegex);
-        const amountMatch = smsContent.match(amountRegex);
-
-        if (codeMatch && amountMatch) {
-            const code = codeMatch[1].toUpperCase();
-            
-            // Remove commas to get pure number (19,000 -> 19000)
-            const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
-
-            console.log(`✅ MATCH FOUND!`);
-            console.log(`> Code: ${code}`);
-            console.log(`> Amount: ${amount}`);
-
-            // 4. SAVE TO FIREBASE
-            await db.collection('mpesa_payments').doc(code).set({
-                code: code,
-                amount: amount,
-                fullMessage: smsContent,
-                originalSender: sender,
-                used: false,
-                timestamp: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            console.log("💾 SAVED TO DATABASE.");
-            return res.status(200).send("Payment Saved");
-        } else {
-            console.log("❌ PARSING FAILED.");
-            if(!codeMatch) console.log("-> Could not find Transaction Code (e.g. QA... Confirmed)");
-            if(!amountMatch) console.log("-> Could not find Amount (e.g. Ksh...)");
-            return res.status(200).send("Could not parse");
-        }
-
-    } catch (error) {
-        console.error("🚨 CRITICAL ERROR:", error);
-        res.status(500).send(error.message);
-    }
-});
-
+// Send index.html on load
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
+// ==========================================
+// 🔥 ROBUST SMS WEBHOOK (For SMS Forwarder Apps)
+// ==========================================
+app.post('/webhook/sms', async (req, res) => {
+  console.log("\n=======================================");
+  console.log("👉 SMS Webhook Triggered!");
+  
+  // 1. Respond immediately to keep the app happy
+  res.status(200).send("Received");
+
+  try {
+    // 2. Extract Message Content (Handles different app formats)
+    // Some apps send { "message": "..." }, others { "text": "..." }, others { "content": "..." }
+    const payload = req.body;
+    console.log("📩 Raw Payload:", JSON.stringify(payload, null, 2));
+
+    const messageRaw = payload.message || payload.text || payload.content || payload.body || "";
+    
+    if (!messageRaw || typeof messageRaw !== 'string') {
+      console.log("❌ No valid message text found in payload.");
+      return;
+    }
+
+    console.log("📝 Analyzing Message:", messageRaw.substring(0, 50) + "...");
+
+    // 3. SMART PARSING (Regex)
+    // Looks for: 10-digit code at start or in text, followed by "Confirmed"
+    // Looks for: "Ksh" followed by digits
+    // Looks for: Phone number
+    const codeRegex = /([A-Z0-9]{10})\s+Confirmed/i;
+    const amountRegex = /Ksh\.?\s*([\d,]+\.?\d*)/i; // Handles "Ksh 500", "Ksh500", "Ksh. 500"
+    const phoneRegex = /\d{9,12}/; // Generic phone grabber
+
+    const codeMatch = messageRaw.match(codeRegex);
+    const amountMatch = messageRaw.match(amountRegex);
+    const phoneMatch = messageRaw.match(phoneRegex);
+
+    if (codeMatch) {
+      const transactionId = codeMatch[1].toUpperCase();
+      
+      // Clean amount (remove commas)
+      let amount = 0;
+      if (amountMatch) {
+        amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+      }
+
+      const phone = phoneMatch ? phoneMatch[0] : "Unknown";
+
+      console.log(`✅ MATCH FOUND! Code: ${transactionId} | Amount: ${amount}`);
+
+      // 4. SAVE TO FIRESTORE
+      // Using transactionId as the Document ID guarantees uniqueness
+      await db.collection('mpesa_payments').doc(transactionId).set({
+        transactionId: transactionId,
+        amount: amount,
+        phone: phone,
+        fullMessage: messageRaw,
+        used: false, // Important: Marks it as fresh
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log("💾 Saved to 'mpesa_payments' collection successfully.");
+
+    } else {
+      console.log("⚠️ Message received but NO M-Pesa code found.");
+    }
+
+  } catch (err) {
+    console.error("🔥 Server Error:", err);
+  }
 });
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
