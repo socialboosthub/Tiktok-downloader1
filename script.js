@@ -101,80 +101,81 @@ window.initiateOrder = () => {
 };
 
 // ==========================================
-// 🔥 NEW SMART VERIFICATION LOGIC (30 SEC WAIT)
+// 🔥 VERIFICATION LOGIC (Fixes Deadlock)
 // ==========================================
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
     const btn = document.getElementById('payBtn');
     
+    // 1. Basic Validation
     if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
 
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     const expectedTotal = quantity * currentEggPrice;
 
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Searching (30s)...`;
-
-    // Internal function to check DB
-    const checkDB = async () => {
-        const docRef = doc(db, "mpesa_payments", codeInput);
-        const docSnap = await getDoc(docRef);
-        return docSnap.exists() ? docSnap.data() : null;
-    };
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking (20s)...`;
 
     let attempts = 0;
-    const maxAttempts = 10; // 10 attempts * 3 seconds = 30 seconds
+    const maxAttempts = 7; // Check for ~21 seconds (7 * 3s)
 
     const pollLoop = setInterval(async () => {
         attempts++;
-        console.log(`Attempt ${attempts} to find code ${codeInput}...`);
+        console.log(`🔎 Check #${attempts} for code: ${codeInput}`);
 
         try {
-            const data = await checkDB();
+            // 2. CHECK DATABASE for the code
+            const docRef = doc(db, "mpesa_payments", codeInput);
+            const docSnap = await getDoc(docRef);
 
-            if (data) {
-                // --- FOUND IT! ---
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+
+                // 3. STOP POLLING - FOUND IT
                 clearInterval(pollLoop);
                 
-                // 1. Check if used
+                // 4. CHECK IF ALREADY USED
                 if (data.used) {
-                    alert("This transaction code has already been used!");
+                    alert("❌ This code has already been used!");
                     resetBtn();
                     return;
                 }
 
-                // 2. Check Amount
+                // 5. CHECK AMOUNT (Allow slightly less? No, exact or more)
                 if (data.amount < expectedTotal) {
-                    alert(`Insufficient Amount! Received Ksh ${data.amount}, but order is Ksh ${expectedTotal}.`);
+                    alert(`⚠️ Insufficient Amount! Order is Ksh ${expectedTotal}, but code is Ksh ${data.amount}.`);
                     resetBtn();
                     return;
                 }
 
-                // 3. SUCCESS -> Mark used & Create Order
-                await updateDoc(doc(db, "mpesa_payments", codeInput), { 
+                // 6. SUCCESS! MARK AS USED
+                // We update it first so it can't be reused instantly
+                await updateDoc(docRef, { 
                     used: true, 
                     usedBy: auth.currentUser.uid,
                     claimedAt: new Date()
                 });
 
+                // 7. CREATE ORDER
                 await finalizeOrder(codeInput, data.phone); 
                 document.getElementById('mpesa-modal').style.display = 'none';
                 resetBtn();
+
             } else {
-                // --- NOT FOUND YET ---
+                // NOT FOUND YET
                 if (attempts >= maxAttempts) {
                     clearInterval(pollLoop);
-                    alert("Payment not found yet.\n\n1. If you just sent it, wait 1 minute and try again.\n2. Check if the code is correct.\n3. Contact support.");
+                    alert("❌ Payment not found yet.\n\n1. Ensure you received the M-Pesa SMS.\n2. Ensure the code matches exactly.\n3. Check your internet.");
                     resetBtn();
                 }
             }
         } catch (err) {
             clearInterval(pollLoop);
             console.error(err);
-            alert("Connection Error. Please check internet.");
+            alert("Connection Error. Please try again.");
             resetBtn();
         }
-    }, 3000); // Check every 3 seconds
+    }, 3000); // Wait 3 seconds between checks
 
     function resetBtn() {
         btn.disabled = false;
@@ -200,13 +201,13 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
     try {
         await addDoc(collection(db, "orders"), {
             userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName,
+            userName: auth.currentUser.displayName || "Customer",
             item, 
             unitPrice: currentEggPrice, 
             quantity, 
             totalPrice,
             status: 'Pending',
-            mpesaNumber: phoneNumber || "Verified Code", 
+            mpesaNumber: phoneNumber || "Verified", 
             mpesaCode: mpesaCode,
             address: userLocation.address,
             deliveryCode: deliveryCode, 
@@ -214,12 +215,15 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
         });
         
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
-        alert(`Payment Verified! 🎉\n\nYOUR DELIVERY CODE: ${deliveryCode}`);
+        
+        // Show success and redirect
+        alert(`✅ Payment Verified!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n(Show this to the driver)`);
         window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
         generateWhatsAppLink(quantity, totalPrice, userLocation.address, deliveryCode);
 
     } catch(e) {
         alert("Error saving order: " + e.message);
+        console.error(e);
     }
 }
 
@@ -229,7 +233,7 @@ function generateWhatsAppLink(qty, total, loc, code) {
     if(btn) btn.href = `https://wa.me/254700000000?text=${encodeURIComponent(msg)}`;
 }
 
-// --- PROFILE & SETTINGS (UNCHANGED) ---
+// --- PROFILE & SETTINGS (Standard) ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
@@ -418,7 +422,7 @@ function listenToOrders() {
         if(list) {
             list.innerHTML = "";
             docs.forEach(o => {
-                const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Code: ${o.deliveryCode}</small>` : '';
+                const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Delivery Code: ${o.deliveryCode}</small>` : '';
                 list.innerHTML += `
                 <div class="mini-order" style="margin-bottom:10px;">
                     <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
