@@ -32,6 +32,19 @@
         /* DASHBOARD STYLES */
         .admin-container { max-width: 800px; margin: 0 auto; padding: 20px; }
         .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        
+        /* New Payment Recorder Style */
+        .payment-recorder {
+            background: #fff; border: 2px dashed #4CAF50; padding: 20px;
+            border-radius: 16px; margin-bottom: 20px;
+        }
+        .payment-recorder h4 { margin-top: 0; color: #2E7D32; }
+        .payment-recorder textarea {
+            width: 100%; height: 80px; padding: 10px; border-radius: 8px;
+            border: 1px solid #ccc; font-family: inherit; font-size: 13px;
+            resize: none;
+        }
+
         .price-editor { background: #E3F2FD; padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid #BBDEFB; }
         .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .order-header { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
@@ -84,6 +97,15 @@
             </button>
         </div>
 
+        <div class="payment-recorder">
+            <h4><i class="fa-solid fa-comment-dollar"></i> Register M-Pesa SMS</h4>
+            <p style="font-size:12px; color:#555; margin:5px 0;">Paste the full M-Pesa SMS here to activate it for the customer.</p>
+            <textarea id="mpesaSmsInput" placeholder="Paste SMS here (e.g. UA5KK2UVTQ Confirmed...)"></textarea>
+            <button onclick="parseAndSavePayment()" style="margin-top:10px; width:100%; padding:10px; background:#4CAF50; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">
+                Save Payment
+            </button>
+        </div>
+
         <div class="price-editor" id="priceEditor">
             <h4><i class="fa-solid fa-tag"></i> Set Wholesale Price</h4>
             <div style="display:flex; gap:10px; margin-top:10px;">
@@ -100,7 +122,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBrvdknWfFKdl9Bn8TJRrpWEc2RQDEHZqE",
@@ -116,7 +138,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- CREDENTIALS (Local Check for UI Only, Real Check is Firebase) ---
+        // --- CREDENTIALS ---
         const CREDENTIALS = {
             "ashrafsquad001@gmail.com": { pass: "Ashraf.3691", role: "SUPER" },
             "abdulraxmanxamza@gmail.com": { pass: "Ahamza4066", role: "MANAGER" }
@@ -126,37 +148,29 @@
         let currentEmail = "";
         let currentRole = "";
 
-        // --- STEP 1: CHECK EMAIL LOCALLY ---
+        // --- LOGIN LOGIC ---
         window.checkEmail = () => {
             const email = document.getElementById('secEmail').value.trim().toLowerCase();
             const err = document.getElementById('error-display');
-            
             if(CREDENTIALS[email]) {
                 currentEmail = email;
                 currentRole = CREDENTIALS[email].role;
                 document.getElementById('step-1').classList.remove('active');
                 document.getElementById('step-2').classList.add('active');
                 err.innerText = "";
-            } else {
-                err.innerText = "Gmail is not correct";
-            }
+            } else { err.innerText = "Gmail is not correct"; }
         };
 
-        // --- STEP 2: CHECK PASSWORD LOCALLY ---
         window.checkPass = () => {
             const pass = document.getElementById('secPass').value;
             const err = document.getElementById('error-display');
-
             if(pass === CREDENTIALS[currentEmail].pass) {
                 document.getElementById('step-2').classList.remove('active');
                 document.getElementById('step-3').classList.add('active');
                 err.innerText = "";
-            } else {
-                err.innerText = "Wrong password";
-            }
+            } else { err.innerText = "Wrong password"; }
         };
 
-        // --- STEP 3: CHECK CODE & REAL LOGIN ---
         window.checkCode = async () => {
             const code = document.getElementById('secCode').value;
             const err = document.getElementById('error-display');
@@ -166,38 +180,68 @@
                 try {
                     btn.innerText = "Authenticating...";
                     btn.disabled = true;
-
-                    // REAL FIREBASE LOGIN (Necessary for Rules)
                     await signInWithEmailAndPassword(auth, currentEmail, CREDENTIALS[currentEmail].pass);
-
-                    // Login Success
                     document.getElementById('security-overlay').style.display = 'none';
                     document.getElementById('admin-panel').style.display = 'block';
                     initDashboard(currentRole);
-
                 } catch (error) {
                     console.error(error);
                     err.innerText = "Firebase Error: " + error.code;
                     btn.innerText = "Login As Admin";
                     btn.disabled = false;
                 }
-            } else {
-                err.innerText = "Invalid Code";
-            }
+            } else { err.innerText = "Invalid Code"; }
         };
 
-        window.logoutAdmin = () => {
-            signOut(auth).then(() => {
-                window.location.href = 'index.html';
-            });
+        window.logoutAdmin = () => signOut(auth).then(() => window.location.href = 'index.html');
+
+        // --- NEW: PARSE AND SAVE MPESA ---
+        window.parseAndSavePayment = async () => {
+            const text = document.getElementById('mpesaSmsInput').value;
+            if(!text) return alert("Please paste the SMS first.");
+
+            // REGEX to find CODE, AMOUNT and PHONE
+            // Example: UA5KK2UVTQ Confirmed.You have received Ksh19,000.00 from ikran...
+            
+            const codeRegex = /([A-Z0-9]{10})\s+Confirmed/i;
+            const amountRegex = /Ksh\.?\s*([\d,]+\.?\d*)/i;
+            const phoneRegex = /\d{10,12}/;
+
+            const codeMatch = text.match(codeRegex);
+            const amountMatch = text.match(amountRegex);
+            const phoneMatch = text.match(phoneRegex);
+
+            if(!codeMatch) return alert("❌ Could not find a valid M-Pesa Code.");
+            if(!amountMatch) return alert("❌ Could not find the Amount.");
+
+            const code = codeMatch[1].toUpperCase();
+            const amountRaw = amountMatch[1].replace(/,/g, ''); // Remove commas
+            const amount = parseFloat(amountRaw);
+            const phone = phoneMatch ? phoneMatch[0] : "Unknown";
+
+            try {
+                // Save to Firestore so user can verify it
+                await setDoc(doc(db, "mpesa_payments", code), {
+                    transactionId: code,
+                    amount: amount,
+                    phone: phone,
+                    fullMessage: text,
+                    used: false, // User hasn't claimed it yet
+                    timestamp: serverTimestamp()
+                });
+                
+                alert(`✅ SAVED!\nCode: ${code}\nAmount: Ksh ${amount}\n\nCustomer can now verify.`);
+                document.getElementById('mpesaSmsInput').value = ""; // Clear box
+            } catch(e) {
+                alert("Error saving: " + e.message);
+            }
         };
 
         // --- DASHBOARD FUNCTIONS ---
         function initDashboard(role) {
             loadOrders(role === "SUPER");
-            if(role === "SUPER") {
-                loadPrice();
-            } else {
+            if(role === "SUPER") loadPrice();
+            else {
                 document.getElementById('priceEditor').style.display = 'none';
                 document.getElementById('dashboardTitle').innerText = "Delivery Dashboard";
             }
@@ -205,61 +249,44 @@
 
         async function loadPrice() {
             const docSnap = await getDoc(doc(db, "config", "pricing"));
-            if (docSnap.exists()) {
-                document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
-            } else {
-                document.getElementById('adminPriceInput').value = 385; 
-            }
+            if (docSnap.exists()) document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
+            else document.getElementById('adminPriceInput').value = 385; 
         }
 
         window.updateGlobalPrice = async () => {
             const newPrice = parseInt(document.getElementById('adminPriceInput').value);
             if(newPrice < 1) return alert("Invalid price");
-            
             try {
                 await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
                 alert("Price updated to " + newPrice);
-            } catch (e) {
-                alert("Update failed: " + e.message);
-            }
+            } catch (e) { alert("Update failed: " + e.message); }
         };
 
         window.verifyDeliveryCode = async (orderId) => {
             const codeInput = prompt("Enter the 5-char code from Customer:");
             if (!codeInput) return;
-
             const orderRef = doc(db, "orders", orderId);
             const orderSnap = await getDoc(orderRef);
 
             if (orderSnap.exists()) {
                 const realCode = orderSnap.data().deliveryCode;
-                // Case insensitive check
                 if (realCode && codeInput.toUpperCase() === realCode) {
                     await updateDoc(orderRef, { status: 'Delivered' });
                     alert("✅ SUCCESS! Order marked Delivered.");
-                } else {
-                    alert("❌ ERROR! Code does not match.");
-                }
+                } else alert("❌ ERROR! Code does not match.");
             }
         };
 
         window.markDeliveredForce = async (id) => {
-            if(confirm("Force mark as delivered? (Only for Managers)")) {
-                await updateDoc(doc(db, "orders", id), { status: 'Delivered' });
-            }
+            if(confirm("Force mark as delivered?")) await updateDoc(doc(db, "orders", id), { status: 'Delivered' });
         };
 
         function loadOrders(isSuper) {
             const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-            
             onSnapshot(q, (snap) => {
                 const list = document.getElementById('adminOrdersList');
                 list.innerHTML = "";
-                
-                if(snap.empty) {
-                    list.innerHTML = "<p>No orders yet.</p>";
-                    return;
-                }
+                if(snap.empty) { list.innerHTML = "<p>No orders yet.</p>"; return; }
 
                 snap.forEach(docSnap => {
                     const o = docSnap.data();
@@ -270,12 +297,19 @@
                     let buttons = '';
                     if (isPending) {
                         buttons += `<button class="btn-deliver" onclick="verifyDeliveryCode('${docSnap.id}')" style="background:#FF9800; color:black;"><i class="fa-solid fa-key"></i> Verify</button>`;
-                        if(isSuper) {
-                            buttons += `<button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; background:#999; color:white; border:none; padding:8px; border-radius:6px; font-size:12px;">Force</button>`;
-                        }
+                        if(isSuper) buttons += `<button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; background:#999; color:white; border:none; padding:8px; border-radius:6px; font-size:12px;">Force</button>`;
                     }
 
-                    // --- FIXED MAP LINK SYNTAX & ADDED DELIVERY CODE DISPLAY FOR ADMIN ---
+                    // GENERATE EXACT LOCATION MAP LINK
+                    let mapLink = "#";
+                    if (o.locationCoords && o.locationCoords.lat) {
+                        // High accuracy GPS link
+                        mapLink = `https://www.google.com/maps?q=${o.locationCoords.lat},${o.locationCoords.lng}`;
+                    } else {
+                        // Fallback to address search
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address + ', Mombasa')}`;
+                    }
+
                     list.innerHTML += `
                         <div class="order-card" style="border-left: 5px solid ${isPending ? '#FF9800' : '#4CAF50'}">
                             <div class="order-header">
@@ -294,9 +328,9 @@
                                 <i class="fa-regular fa-clock"></i> ${date}
                             </div>
                             <div class="admin-actions">
-                                <button class="btn-map" onclick="window.open(\`https://www.google.com/maps/search/?api=1&query=\${encodeURIComponent(o.address + ', Mombasa')}\`)">
+                                <a href="${mapLink}" target="_blank" class="btn-map">
                                     <i class="fa-solid fa-map-location-dot"></i> Map
-                                </button>
+                                </a>
                                 ${buttons}
                                 <a href="https://wa.me/254${o.mpesaNumber && o.mpesaNumber.length > 9 ? o.mpesaNumber.substring(o.mpesaNumber.length - 9) : ''}" target="_blank" class="btn-map" style="background:#25D366; text-decoration:none; display:inline-flex; align-items:center;">
                                     <i class="fa-brands fa-whatsapp"></i> Chat
@@ -306,8 +340,8 @@
                     `;
                 });
             }, (error) => {
-                console.error("Error loading orders:", error);
-                list.innerHTML = `<p style="color:red;">Error loading orders: ${error.message}</p>`;
+                console.error(error);
+                list.innerHTML = `<p style="color:red;">Error loading orders</p>`;
             });
         }
     </script>
