@@ -101,7 +101,7 @@ window.initiateOrder = () => {
 };
 
 // ==========================================
-// 🔥 VERIFICATION LOGIC (Fixes Deadlock)
+// 🔥 ROBUST VERIFICATION LOGIC (With Timeout)
 // ==========================================
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
@@ -114,10 +114,10 @@ window.verifyPayment = async () => {
     const expectedTotal = quantity * currentEggPrice;
 
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking (20s)...`;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking Database (30s)...`;
 
     let attempts = 0;
-    const maxAttempts = 7; // Check for ~21 seconds (7 * 3s)
+    const maxAttempts = 10; // Check for ~30 seconds (10 * 3s)
 
     const pollLoop = setInterval(async () => {
         attempts++;
@@ -141,14 +141,14 @@ window.verifyPayment = async () => {
                     return;
                 }
 
-                // 5. CHECK AMOUNT (Allow slightly less? No, exact or more)
+                // 5. CHECK AMOUNT (Strict Check)
                 if (data.amount < expectedTotal) {
-                    alert(`⚠️ Insufficient Amount! Order is Ksh ${expectedTotal}, but code is Ksh ${data.amount}.`);
+                    alert(`⚠️ Insufficient Amount!\n\nOrder Total: Ksh ${expectedTotal}\nYour Payment: Ksh ${data.amount}\n\nPlease contact support.`);
                     resetBtn();
                     return;
                 }
 
-                // 6. SUCCESS! MARK AS USED
+                // 6. SUCCESS! MARK AS USED IMMEDIATELY
                 // We update it first so it can't be reused instantly
                 await updateDoc(docRef, { 
                     used: true, 
@@ -156,7 +156,7 @@ window.verifyPayment = async () => {
                     claimedAt: new Date()
                 });
 
-                // 7. CREATE ORDER
+                // 7. CREATE ORDER (Pass the M-Pesa phone number)
                 await finalizeOrder(codeInput, data.phone); 
                 document.getElementById('mpesa-modal').style.display = 'none';
                 resetBtn();
@@ -165,7 +165,7 @@ window.verifyPayment = async () => {
                 // NOT FOUND YET
                 if (attempts >= maxAttempts) {
                     clearInterval(pollLoop);
-                    alert("❌ Payment not found yet.\n\n1. Ensure you received the M-Pesa SMS.\n2. Ensure the code matches exactly.\n3. Check your internet.");
+                    alert("❌ Payment Code Not Found.\n\n1. Ensure Admin has received the SMS.\n2. Ensure code matches exactly.\n3. Contact Support if deducted.");
                     resetBtn();
                 }
             }
@@ -198,6 +198,13 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
     const item = "Tray of 30";
     const deliveryCode = generateOrderCode();
 
+    // Prepare location data
+    // If we have GPS coords, send them. If not, just address.
+    const locationData = {
+        lat: userLocation.lat || null,
+        lng: userLocation.lng || null
+    };
+
     try {
         await addDoc(collection(db, "orders"), {
             userId: auth.currentUser.uid,
@@ -210,6 +217,7 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
             mpesaNumber: phoneNumber || "Verified", 
             mpesaCode: mpesaCode,
             address: userLocation.address,
+            locationCoords: locationData, // 🔥 SAVING EXACT COORDINATES
             deliveryCode: deliveryCode, 
             createdAt: new Date()
         });
@@ -233,7 +241,7 @@ function generateWhatsAppLink(qty, total, loc, code) {
     if(btn) btn.href = `https://wa.me/254700000000?text=${encodeURIComponent(msg)}`;
 }
 
-// --- PROFILE & SETTINGS (Standard) ---
+// --- PROFILE & SETTINGS ---
 window.openProfileModal = () => {
     const user = auth.currentUser;
     if(!user) return;
@@ -319,17 +327,33 @@ window.changeLanguage = async (lang) => {
     if (auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { lang }, { merge: true });
 };
 
+// --- LOCATION LOGIC (High Accuracy) ---
 window.initLocationFlow = function() {
-    const choice = confirm("Use GPS for location?");
+    const choice = confirm("Use GPS for exact delivery location?\n(We recommend 'OK' for accuracy)");
     if (choice) {
         if (!navigator.geolocation) return window.openLocationSearch();
+        
+        // Request High Accuracy
         navigator.geolocation.getCurrentPosition(
             async (pos) => {
-                userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "GPS Location (Mombasa)", timestamp: new Date() };
+                // Save Lat/Lng properly
+                userLocation = { 
+                    lat: pos.coords.latitude, 
+                    lng: pos.coords.longitude, 
+                    address: "GPS Location (Mombasa)", 
+                    timestamp: new Date() 
+                };
+                
+                // Reverse Geocoding optional, but for now we label it GPS
                 saveLoc();
-                alert("GPS Location set!");
+                alert("✅ GPS Location set! Orders will now include your exact map pin.");
             }, 
-            () => { alert("GPS failed."); window.openLocationSearch(); }
+            (err) => { 
+                console.error(err);
+                alert("GPS failed or denied. Please select area manually."); 
+                window.openLocationSearch(); 
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     } else { window.openLocationSearch(); }
 };
@@ -358,7 +382,8 @@ window.filterLocations = () => {
 };
 
 window.selectLocation = (address) => {
-    userLocation = { address: address };
+    // Manual selection has NO coordinates, only address text
+    userLocation = { address: address, lat: null, lng: null };
     saveLoc();
     document.getElementById('location-modal').style.display = 'none';
 };
