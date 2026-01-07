@@ -297,22 +297,12 @@
                     }
 
 
-                    let mapLink = "#";
-if (o.locationCoords && o.locationCoords.lat && o.locationCoords.lng) {
-    // Exact GPS Pin
-    mapLink = `https://www.google.com/maps/search/?api=1&query=${o.locationCoords.lat},${o.locationCoords.lng}`;
-} else {
-    // Smart Fallback: Search the address + City
-    // This fixes "location not working" by searching Google for the text instead
-    const searchAddress = (o.address || "") + ", Mombasa, Kenya";
-    mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchAddress)}`;
-}
-
-// ... inside the list.innerHTML += ...
-
-<a href="${mapLink}" target="_blank" class="btn-map">
-    <i class="fa-solid fa-map-location-dot"></i> Map
-</a>
+                  let mapLink = "#";
+                    if (o.locationCoords && o.locationCoords.lat) {
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=\${o.locationCoords.lat},${o.locationCoords.lng}`;
+                    } else {
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=\${encodeURIComponent(o.address + ', Mombasa')}`;
+                    }  
 
 
                     // SECURITY CHECK: Only show Delivery Code if Super Admin
