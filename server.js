@@ -1,81 +1,109 @@
 const express = require('express');
-const admin = require('firebase-admin');
-const cors = require('cors');
+const path = require('path');
 const bodyParser = require('body-parser');
-const path = require('path'); // Added to help locate your HTML file
+const admin = require('firebase-admin');
+const serviceAccount = require('./serviceAccountKey.json');
 
-// Initialize Firebase Admin
-var serviceAccount = require("./serviceAccountKey.json");
-
+// Initialize Firebase
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
 }
-
 const db = admin.firestore();
+
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// --- FIX 1: ACCEPT ALL DATA FORMATS ---
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({ extended: true })); 
+app.use(express.static(path.join(__dirname, '/')));
 
-// --- THIS IS THE CHANGE ---
-// 1. Serve static files (css, js, images) from the current folder
-app.use(express.static(__dirname));
-
-// 2. Send the index.html file when someone opens the site
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-// --------------------------
-
-// WEBHOOK: Handle Incoming SMS
+// --- THE WEBHOOK ---
 app.post('/webhook/sms', async (req, res) => {
-  console.log("👉 Data Received!");
-  
-  // Try to find the message in ANY format (body or query)
-  const message = req.body.message || req.body.text || req.query.message || req.query.text || "";
-  const sender = req.body.sender || req.query.sender || "Unknown";
+    try {
+        console.log("\n==================== INCOMING REQUEST ====================");
+        
+        // --- DEBUG: SEE EXACTLY WHAT THE APP SENT ---
+        console.log("RAW BODY:", JSON.stringify(req.body, null, 2));
 
-  // IMMEDIATELY tell the app "OK" so it doesn't timeout
-  res.status(200).send("OK");
+        // 1. Get the message content (Try every possible field name)
+        // Some apps use 'message', some 'text', some 'content', some 'body'
+        let smsContent = req.body.message || req.body.body || req.body.text || req.body.content || req.body.msg || "";
+        
+        // If smsContent is still empty, check if the app sent the message as a key
+        if (!smsContent && typeof req.body === 'string') {
+            smsContent = req.body;
+        }
 
-  if (!message) {
-    console.log("❌ No message found in this request");
-    return;
-  }
+        const sender = req.body.sender || req.body.from || req.body.phone || "Unknown";
 
-  try {
-    // Regex for M-PESA Code (e.g., SHID1234567)
-    const mpesaRegex = /([A-Z0-9]{10})\s+Confirmed/i;
-    const codeMatch = message.match(mpesaRegex);
+        console.log(`> Sender: ${sender}`);
+        console.log(`> Content: "${smsContent}"`);
 
-    if (codeMatch) {
-      const transactionId = codeMatch[1];
-      console.log(`✅ Found Code: ${transactionId}`);
+        if (!smsContent) {
+            console.log("❌ ERROR: No SMS content found in request.");
+            return res.status(400).send("No content received");
+        }
 
-      const ordersRef = db.collection('orders');
-      const snapshot = await ordersRef.where('transactionId', '==', transactionId).get();
+        // 2. CHECK: Is it M-Pesa? (Check for 'Confirmed' keyword)
+        if (!smsContent.toLowerCase().includes("confirmed")) {
+            console.log("⚠️ Ignored: Message does not contain 'Confirmed'.");
+            return res.status(200).send("Ignored");
+        }
 
-      if (!snapshot.empty) {
-        const batch = db.batch();
-        snapshot.docs.forEach(doc => {
-          batch.update(ordersRef.doc(doc.id), { 
-            status: 'approved',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          });
-        });
-        await batch.commit();
-        console.log(`🎉 Order ${transactionId} Approved!`);
-      } else {
-        console.log(`⚠️ Code ${transactionId} not found in database.`);
-      }
+        // 3. EXTRACT DATA (BULLETPROOF REGEX)
+        
+        // FIX 2: Removed '^' anchor. Finds 10-digit code anywhere in text.
+        // Example: "Fwd: UA5KK..." works now.
+        const codeRegex = /([A-Z0-9]{10})\s+Confirmed/i;
+        
+        // Looks for 'Ksh' followed by numbers, ignoring spaces or weird chars
+        const amountRegex = /Ksh\s*([\d,]+)/i;
+
+        const codeMatch = smsContent.match(codeRegex);
+        const amountMatch = smsContent.match(amountRegex);
+
+        if (codeMatch && amountMatch) {
+            const code = codeMatch[1].toUpperCase();
+            
+            // Remove commas to get pure number (19,000 -> 19000)
+            const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+
+            console.log(`✅ MATCH FOUND!`);
+            console.log(`> Code: ${code}`);
+            console.log(`> Amount: ${amount}`);
+
+            // 4. SAVE TO FIREBASE
+            await db.collection('mpesa_payments').doc(code).set({
+                code: code,
+                amount: amount,
+                fullMessage: smsContent,
+                originalSender: sender,
+                used: false,
+                timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            console.log("💾 SAVED TO DATABASE.");
+            return res.status(200).send("Payment Saved");
+        } else {
+            console.log("❌ PARSING FAILED.");
+            if(!codeMatch) console.log("-> Could not find Transaction Code (e.g. QA... Confirmed)");
+            if(!amountMatch) console.log("-> Could not find Amount (e.g. Ksh...)");
+            return res.status(200).send("Could not parse");
+        }
+
+    } catch (error) {
+        console.error("🚨 CRITICAL ERROR:", error);
+        res.status(500).send(error.message);
     }
-  } catch (err) {
-    console.error("🔥 Database Error:", err);
-  }
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Listening on ${PORT}`));
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+});
