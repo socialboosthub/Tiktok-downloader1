@@ -4,8 +4,8 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 
-// Initialize Firebase Admin
-// Make sure serviceAccountKey.json is in the same folder
+// 1. SETUP FIREBASE ADMIN
+// Ensure 'serviceAccountKey.json' is in the same folder
 var serviceAccount = require("./serviceAccountKey.json");
 
 if (!admin.apps.length) {
@@ -18,8 +18,9 @@ const db = admin.firestore();
 const app = express();
 
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Increased limit for larger payloads
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files (Frontend)
 app.use(express.static(__dirname));
@@ -30,70 +31,65 @@ app.get('/', (req, res) => {
 });
 
 // ==========================================
-// 🔥 ROBUST SMS WEBHOOK (For SMS Forwarder Apps)
+// 🔥 AUTOMATIC SMS WEBHOOK
+// This is where the SMS Forwarder App sends data
 // ==========================================
 app.post('/webhook/sms', async (req, res) => {
-  console.log("\n=======================================");
-  console.log("👉 SMS Webhook Triggered!");
+  console.log("👉 Incoming SMS Webhook...");
   
-  // 1. Respond immediately to keep the app happy
+  // Always respond 200 OK quickly so the app knows it worked
   res.status(200).send("Received");
 
   try {
-    // 2. Extract Message Content (Handles different app formats)
-    // Some apps send { "message": "..." }, others { "text": "..." }, others { "content": "..." }
+    // 1. GET THE MESSAGE
+    // Different apps send data differently. We check all common fields.
     const payload = req.body;
-    console.log("📩 Raw Payload:", JSON.stringify(payload, null, 2));
+    console.log("📩 Payload:", JSON.stringify(payload));
 
     const messageRaw = payload.message || payload.text || payload.content || payload.body || "";
+    const sender = payload.from || payload.sender || payload.number || "";
+
+    // 2. FILTER: Only Process M-Pesa messages
+    if (!messageRaw) return console.log("❌ Empty message.");
     
-    if (!messageRaw || typeof messageRaw !== 'string') {
-      console.log("❌ No valid message text found in payload.");
-      return;
+    // Check if it looks like an M-Pesa message
+    if (!messageRaw.includes("Confirmed") && !messageRaw.includes("received")) {
+        return console.log("⚠️ Ignored: Not an M-Pesa transaction.");
     }
 
-    console.log("📝 Analyzing Message:", messageRaw.substring(0, 50) + "...");
-
-    // 3. SMART PARSING (Regex)
-    // Looks for: 10-digit code at start or in text, followed by "Confirmed"
-    // Looks for: "Ksh" followed by digits
-    // Looks for: Phone number
+    // 3. EXTRACT DATA (Regex)
+    // Looks for: "UA5KK..." then "Confirmed"
+    // Looks for: "Ksh" then "19,000.00"
     const codeRegex = /([A-Z0-9]{10})\s+Confirmed/i;
-    const amountRegex = /Ksh\.?\s*([\d,]+\.?\d*)/i; // Handles "Ksh 500", "Ksh500", "Ksh. 500"
-    const phoneRegex = /\d{9,12}/; // Generic phone grabber
+    const amountRegex = /Ksh\.?\s*([\d,]+\.?\d*)/i;
+    const phoneRegex = /\d{10,12}/;
 
     const codeMatch = messageRaw.match(codeRegex);
     const amountMatch = messageRaw.match(amountRegex);
     const phoneMatch = messageRaw.match(phoneRegex);
 
-    if (codeMatch) {
+    if (codeMatch && amountMatch) {
       const transactionId = codeMatch[1].toUpperCase();
-      
-      // Clean amount (remove commas)
-      let amount = 0;
-      if (amountMatch) {
-        amount = parseFloat(amountMatch[1].replace(/,/g, ''));
-      }
+      const amount = parseFloat(amountMatch[1].replace(/,/g, '')); // Remove commas
+      const phone = phoneMatch ? phoneMatch[0] : sender; // Use extracted phone or sender
 
-      const phone = phoneMatch ? phoneMatch[0] : "Unknown";
+      console.log(`✅ VALID PAYMENT! Code: ${transactionId} | Amount: ${amount}`);
 
-      console.log(`✅ MATCH FOUND! Code: ${transactionId} | Amount: ${amount}`);
-
-      // 4. SAVE TO FIRESTORE
-      // Using transactionId as the Document ID guarantees uniqueness
+      // 4. SAVE TO DATABASE (Firestore)
+      // We use 'set' so it creates or updates safely
       await db.collection('mpesa_payments').doc(transactionId).set({
         transactionId: transactionId,
         amount: amount,
         phone: phone,
         fullMessage: messageRaw,
-        used: false, // Important: Marks it as fresh
+        used: false, // Customer hasn't used it yet
+        method: "Automatic Webhook",
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      console.log("💾 Saved to 'mpesa_payments' collection successfully.");
-
+      console.log("💾 Saved to Database.");
     } else {
-      console.log("⚠️ Message received but NO M-Pesa code found.");
+      console.log("⚠️ Could not parse Code or Amount from SMS.");
     }
 
   } catch (err) {
