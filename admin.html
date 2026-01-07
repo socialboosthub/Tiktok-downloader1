@@ -33,10 +33,9 @@
         .admin-container { max-width: 800px; margin: 0 auto; padding: 20px; }
         .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
         
-        /* New Payment Recorder Style */
         .payment-recorder {
             background: #fff; border: 2px dashed #4CAF50; padding: 20px;
-            border-radius: 16px; margin-bottom: 20px;
+            border-radius: 16px; margin-bottom: 20px; display: none; /* Hidden by default */
         }
         .payment-recorder h4 { margin-top: 0; color: #2E7D32; }
         .payment-recorder textarea {
@@ -97,9 +96,9 @@
             </button>
         </div>
 
-        <div class="payment-recorder">
-            <h4><i class="fa-solid fa-comment-dollar"></i> Register M-Pesa SMS</h4>
-            <p style="font-size:12px; color:#555; margin:5px 0;">Paste the full M-Pesa SMS here to activate it for the customer.</p>
+        <div class="payment-recorder" id="manualEntrySection">
+            <h4><i class="fa-solid fa-comment-dollar"></i> Manual M-Pesa Entry</h4>
+            <p style="font-size:12px; color:#555; margin:5px 0;">Backup Method: Paste SMS here if the auto-forwarder fails.</p>
             <textarea id="mpesaSmsInput" placeholder="Paste SMS here (e.g. UA5KK2UVTQ Confirmed...)"></textarea>
             <button onclick="parseAndSavePayment()" style="margin-top:10px; width:100%; padding:10px; background:#4CAF50; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">
                 Save Payment
@@ -112,7 +111,6 @@
                 <input type="number" id="adminPriceInput" style="padding:10px; border-radius:8px; border:1px solid #ccc; width:100px;">
                 <button onclick="updateGlobalPrice()" style="padding:10px 20px; background:#1976D2; color:white; border:none; border-radius:8px; cursor:pointer;">Update Price</button>
             </div>
-            <small style="color:#555;">Current customers will see this price immediately.</small>
         </div>
 
         <h3>Incoming Orders</h3>
@@ -195,14 +193,10 @@
 
         window.logoutAdmin = () => signOut(auth).then(() => window.location.href = 'index.html');
 
-        // --- NEW: PARSE AND SAVE MPESA ---
+        // --- MANUAL SAVE LOGIC (Backup) ---
         window.parseAndSavePayment = async () => {
             const text = document.getElementById('mpesaSmsInput').value;
             if(!text) return alert("Please paste the SMS first.");
-
-            // REGEX to find CODE, AMOUNT and PHONE
-            // Example: UA5KK2UVTQ Confirmed.You have received Ksh19,000.00 from ikran...
-            
             const codeRegex = /([A-Z0-9]{10})\s+Confirmed/i;
             const amountRegex = /Ksh\.?\s*([\d,]+\.?\d*)/i;
             const phoneRegex = /\d{10,12}/;
@@ -215,34 +209,36 @@
             if(!amountMatch) return alert("❌ Could not find the Amount.");
 
             const code = codeMatch[1].toUpperCase();
-            const amountRaw = amountMatch[1].replace(/,/g, ''); // Remove commas
+            const amountRaw = amountMatch[1].replace(/,/g, ''); 
             const amount = parseFloat(amountRaw);
             const phone = phoneMatch ? phoneMatch[0] : "Unknown";
 
             try {
-                // Save to Firestore so user can verify it
                 await setDoc(doc(db, "mpesa_payments", code), {
                     transactionId: code,
                     amount: amount,
                     phone: phone,
                     fullMessage: text,
-                    used: false, // User hasn't claimed it yet
+                    used: false,
+                    method: "Manual Admin Entry",
                     timestamp: serverTimestamp()
                 });
-                
-                alert(`✅ SAVED!\nCode: ${code}\nAmount: Ksh ${amount}\n\nCustomer can now verify.`);
-                document.getElementById('mpesaSmsInput').value = ""; // Clear box
-            } catch(e) {
-                alert("Error saving: " + e.message);
-            }
+                alert(`✅ SAVED!\nCode: ${code}\nAmount: Ksh ${amount}`);
+                document.getElementById('mpesaSmsInput').value = ""; 
+            } catch(e) { alert("Error saving: " + e.message); }
         };
 
         // --- DASHBOARD FUNCTIONS ---
         function initDashboard(role) {
-            loadOrders(role === "SUPER");
-            if(role === "SUPER") loadPrice();
-            else {
+            const isSuper = (role === "SUPER");
+            loadOrders(isSuper);
+
+            if(isSuper) {
+                loadPrice();
+                document.getElementById('manualEntrySection').style.display = 'block'; // Show manual entry for Super Admin
+            } else {
                 document.getElementById('priceEditor').style.display = 'none';
+                document.getElementById('manualEntrySection').style.display = 'none'; // Hide for others
                 document.getElementById('dashboardTitle').innerText = "Delivery Dashboard";
             }
         }
@@ -263,7 +259,7 @@
         };
 
         window.verifyDeliveryCode = async (orderId) => {
-            const codeInput = prompt("Enter the 5-char code from Customer:");
+            const codeInput = prompt("Ask customer for the 5-char Delivery Code:");
             if (!codeInput) return;
             const orderRef = doc(db, "orders", orderId);
             const orderSnap = await getDoc(orderRef);
@@ -300,27 +296,29 @@
                         if(isSuper) buttons += `<button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; background:#999; color:white; border:none; padding:8px; border-radius:6px; font-size:12px;">Force</button>`;
                     }
 
-                    // GENERATE EXACT LOCATION MAP LINK
                     let mapLink = "#";
                     if (o.locationCoords && o.locationCoords.lat) {
-                        // High accuracy GPS link
-                        mapLink = `https://www.google.com/maps?q=${o.locationCoords.lat},${o.locationCoords.lng}`;
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=\${o.locationCoords.lat},${o.locationCoords.lng}`;
                     } else {
-                        // Fallback to address search
-                        mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address + ', Mombasa')}`;
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=\${encodeURIComponent(o.address + ', Mombasa')}`;
                     }
+
+                    // SECURITY CHECK: Only show Delivery Code if Super Admin
+                    const codeDisplay = isSuper 
+                        ? `<small style="background:#eee; padding:2px 6px; border-radius:4px; color:#555;">Code: <b>${o.deliveryCode}</b></small>` 
+                        : `<small style="background:#eee; padding:2px 6px; border-radius:4px; color:#555;">Code: 🔒 Hidden</small>`;
 
                     list.innerHTML += `
                         <div class="order-card" style="border-left: 5px solid ${isPending ? '#FF9800' : '#4CAF50'}">
                             <div class="order-header">
                                 <strong>#${docSnap.id.slice(0,5)}</strong>
-                                <small style="background:#eee; padding:2px 6px; border-radius:4px; color:#555;">Code: <b>${o.deliveryCode}</b></small>
+                                ${codeDisplay}
                                 <span class="status-badge ${statusClass}">${o.status}</span>
                             </div>
                             <div style="font-size:14px; margin-bottom:5px;">
                                 <b>${o.quantity} Trays</b> (${o.item}) <br>
                                 Total: Ksh ${o.totalPrice} <br>
-                                M-Pesa: ${o.mpesaNumber || 'N/A'} (Tx: ${o.mpesaCode})
+                                M-Pesa: ${o.mpesaNumber || 'N/A'}
                             </div>
                             <div style="font-size:12px; color:#666; margin-bottom:10px;">
                                 <i class="fa-solid fa-user"></i> ${o.userName || 'User'} <br>
@@ -339,10 +337,7 @@
                         </div>
                     `;
                 });
-            }, (error) => {
-                console.error(error);
-                list.innerHTML = `<p style="color:red;">Error loading orders</p>`;
-            });
+            }, (error) => { console.error(error); });
         }
     </script>
 </body>
