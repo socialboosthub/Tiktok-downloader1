@@ -44,46 +44,23 @@
             <div style="text-align:center; margin-bottom:15px;">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" style="height:40px;" alt="M-Pesa">
             </div>
+            <h3>Payment Required</h3>
             
-            <h3>Confirm Payment</h3>
-            
-            <div style="background:#FFF8E1; padding:15px; border-radius:12px; font-size:13px; margin-bottom:15px; border:2px dashed #FFB300; text-align: left;">
-                <div style="text-align:center; color:#E65100; font-weight:bold; margin-bottom:10px;">
-                    <i class="fa-solid fa-money-bill-transfer"></i> WITHDRAW CASH METHOD
-                </div>
-                
-                <p style="margin:5px 0;">
-                    <i class="fa-solid fa-mobile-screen" style="color:#F57C00; width:20px;"></i> 
-                    Go to <strong>M-Pesa</strong> &gt; <strong>Withdraw Cash</strong>
-                </p>
-                <p style="margin:5px 0;">
-                    <i class="fa-solid fa-user-tie" style="color:#F57C00; width:20px;"></i> 
-                    Select <strong>From Agent</strong>
-                </p>
-                
-                <hr style="border:0; border-top:1px solid #FFE0B2; margin: 10px 0;">
-
-                <p style="margin:5px 0; font-size:14px;">
-                    Agent No: <strong style="background:rgba(255, 179, 0, 0.2); padding:2px 5px; border-radius:4px;">247247</strong> 
-                    </p>
-                
-                <p style="margin:5px 0; font-size:14px;">
-                    Account No: <strong>0700000000</strong>
-                    </p>
-
-                <div style="margin-top:12px; background:white; padding:8px; border-radius:6px; text-align:center; border:1px solid #FFCC80;">
-                    Amount to Pay: <strong style="color:#d32f2f; font-size:16px;">Ksh <span id="mpesaTotalDisplay">0</span></strong>
-                </div>
+            <div style="background:#f9f9f9; padding:15px; border-radius:10px; font-size:13px; margin-bottom:15px; border:1px dashed #ccc;">
+                <p style="margin:0 0 5px;"><strong>1. Go to M-Pesa > Lipa na M-Pesa</strong></p>
+                <p style="margin:0 0 5px;"><strong>2. Buy Goods / Paybill</strong></p>
+                <p style="margin:0 0 5px;">Till: <strong>123456</strong> (Agent Name)</p>
+                <p style="margin:0;">Amount: <strong>Ksh <span id="mpesaTotalDisplay">0</span></strong></p>
             </div>
             
             <div class="input-group">
                 <label>Enter M-Pesa Transaction Code</label>
                 <input type="text" id="mpesaCodeInput" placeholder="e.g. QGH5..." style="text-transform:uppercase; letter-spacing: 2px; font-weight:bold; text-align:center;">
-                <small style="color:#666; font-size:10px; display:block; margin-top:5px;">Wait for the M-Pesa SMS, then type the code here.</small>
+                <small style="color:#666; font-size:10px; display:block; margin-top:5px;">Wait for the SMS, then copy the code here.</small>
             </div>
 
             <button id="payBtn" class="save-btn" style="width:100%; background:#4CAF50; color:white;" onclick="window.verifyPayment()">
-                Verify Payment <i class="fa-solid fa-check"></i>
+                Verify Payment
             </button>
             <button class="cancel-btn" style="width:100%; margin-top:10px;" onclick="document.getElementById('mpesa-modal').style.display='none'">Cancel</button>
         </div>
