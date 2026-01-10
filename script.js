@@ -475,3 +475,34 @@ const heroBtn = document.getElementById('heroOrderBtn');
 if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
+
+
+// --- TEST FUNCTION ---
+// This acts exactly like MacroDroid. It creates a fake payment in the database.
+window.simulateTestPayment = async () => {
+    const testCode = "TEST" + Math.floor(100000 + Math.random() * 900000); // Generates TEST123456
+    const testAmount = parseInt(prompt("Enter Amount to Simulate (e.g. 11550):", "11550"));
+    
+    if(!testAmount) return;
+
+    try {
+        // Write directly to the same collection MacroDroid uses
+        await setDoc(doc(db, "mpesa_payments", testCode), {
+            transactionId: testCode,
+            amount: testAmount,
+            phone: "0700000000",
+            fullMessage: "Simulated Test Message from Website Button",
+            used: false,
+            method: "Simulation",
+            timestamp: new Date()
+        });
+
+        // Auto-fill the box so you can verify it immediately
+        document.getElementById('mpesaCodeInput').value = testCode;
+        alert(`✅ Test Payment Sent to Database!\n\nCode: ${testCode}\nAmount: ${testAmount}\n\nNow click 'Verify Payment' to finish.`);
+        
+    } catch(e) {
+        alert("Error simulating payment: " + e.message);
+        console.error(e);
+    }
+};
