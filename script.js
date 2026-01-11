@@ -198,10 +198,10 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
     const item = "Tray of 30";
     const deliveryCode = generateOrderCode();
 
-    // Prepare location data
+    // Prepare location data safely
     const locationData = {
-        lat: userLocation.lat || null,
-        lng: userLocation.lng || null
+        lat: userLocation ? userLocation.lat : null,
+        lng: userLocation ? userLocation.lng : null
     };
 
     try {
@@ -328,9 +328,14 @@ window.changeLanguage = async (lang) => {
 
 // --- LOCATION LOGIC (High Accuracy) ---
 window.initLocationFlow = function() {
-    const choice = confirm("Use GPS for exact delivery location?\n(We recommend 'OK' for accuracy)");
+    // If user already has a location, maybe confirm overwrite?
+    // For now we just ask for GPS preference.
+    const choice = confirm("Use GPS for exact delivery location?\n(Click 'OK' for GPS, 'Cancel' to select area from list)");
     if (choice) {
-        if (!navigator.geolocation) return window.openLocationSearch();
+        if (!navigator.geolocation) {
+            alert("GPS not supported on this browser.");
+            return window.openLocationSearch();
+        }
         
         // Request High Accuracy
         navigator.geolocation.getCurrentPosition(
@@ -343,7 +348,6 @@ window.initLocationFlow = function() {
                     timestamp: new Date() 
                 };
                 
-                // Reverse Geocoding optional, but for now we label it GPS
                 saveLoc();
                 alert("✅ GPS Location set! Orders will now include your exact map pin.");
             }, 
@@ -354,7 +358,9 @@ window.initLocationFlow = function() {
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
-    } else { window.openLocationSearch(); }
+    } else { 
+        window.openLocationSearch(); 
+    }
 };
 
 window.openLocationSearch = () => {
