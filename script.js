@@ -101,7 +101,7 @@ window.initiateOrder = () => {
 };
 
 // ==========================================
-// 🔥 ROBUST VERIFICATION LOGIC (With Timeout)
+// 🔥 ROBUST VERIFICATION LOGIC (With Strict Amount Check)
 // ==========================================
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
@@ -131,25 +131,25 @@ window.verifyPayment = async () => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
 
-                // 3. STOP POLLING - FOUND IT
+                // 3. STOP POLLING - FOUND THE CODE
                 clearInterval(pollLoop);
                 
                 // 4. CHECK IF ALREADY USED
                 if (data.used) {
-                    alert("❌ This code has already been used!");
+                    alert("❌ SCAM ALERT: This M-Pesa code has already been used!");
                     resetBtn();
                     return;
                 }
 
-                // 5. CHECK AMOUNT (Strict Check)
+                // 5. 🔥 STRICT AMOUNT CHECK 🔥
+                // Prevents scams where user pays 1 Ksh but orders 100 Trays
                 if (data.amount < expectedTotal) {
-                    alert(`⚠️ Insufficient Amount!\n\nOrder Total: Ksh ${expectedTotal}\nYour Payment: Ksh ${data.amount}\n\nPlease contact support.`);
+                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${data.amount}\n\nTransaction rejected due to insufficient funds.`);
                     resetBtn();
                     return;
                 }
 
                 // 6. SUCCESS! MARK AS USED IMMEDIATELY
-                // We update it first so it can't be reused instantly
                 await updateDoc(docRef, { 
                     used: true, 
                     usedBy: auth.currentUser.uid,
@@ -199,7 +199,6 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
     const deliveryCode = generateOrderCode();
 
     // Prepare location data
-    // If we have GPS coords, send them. If not, just address.
     const locationData = {
         lat: userLocation.lat || null,
         lng: userLocation.lng || null
@@ -217,7 +216,7 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
             mpesaNumber: phoneNumber || "Verified", 
             mpesaCode: mpesaCode,
             address: userLocation.address,
-            locationCoords: locationData, // 🔥 SAVING EXACT COORDINATES
+            locationCoords: locationData,
             deliveryCode: deliveryCode, 
             createdAt: new Date()
         });
@@ -481,9 +480,10 @@ window.logoutUser = () => signOut(auth).then(() => location.reload());
 // This acts exactly like MacroDroid. It creates a fake payment in the database.
 window.simulateTestPayment = async () => {
     const testCode = "TEST" + Math.floor(100000 + Math.random() * 900000); // Generates TEST123456
-    const testAmount = parseInt(prompt("Enter Amount to Simulate (e.g. 11550):", "11550"));
+    const amountStr = prompt("Enter Amount to Simulate (e.g. 11550):", "11550");
     
-    if(!testAmount) return;
+    if(!amountStr) return;
+    const testAmount = parseInt(amountStr);
 
     try {
         // Write directly to the same collection MacroDroid uses
