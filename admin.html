@@ -296,14 +296,17 @@
                         if(isSuper) buttons += `<button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; background:#999; color:white; border:none; padding:8px; border-radius:6px; font-size:12px;">Force</button>`;
                     }
 
-
-                  let mapLink = "#";
-                    if (o.locationCoords && o.locationCoords.lat) {
-                        mapLink = `https://www.google.com/maps/search/?api=1&query=\${o.locationCoords.lat},${o.locationCoords.lng}`;
+                    // --- 🔥 FIXED GOOGLE MAPS LINK GENERATION 🔥 ---
+                    let mapLink = "#";
+                    if (o.locationCoords && o.locationCoords.lat && o.locationCoords.lng) {
+                        // High Accuracy: Direct to Lat/Lng
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=${o.locationCoords.lat},${o.locationCoords.lng}`;
                     } else {
-                        mapLink = `https://www.google.com/maps/search/?api=1&query=\${encodeURIComponent(o.address + ', Mombasa')}`;
-                    }  
-
+                        // Fallback: Search by Address string
+                        const addressQuery = encodeURIComponent(o.address + ", Mombasa");
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=${addressQuery}`;
+                    }
+                    // -----------------------------------------------
 
                     // SECURITY CHECK: Only show Delivery Code if Super Admin
                     const codeDisplay = isSuper 
