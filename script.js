@@ -84,7 +84,8 @@ async function fetchLivePriceAndStock() {
             const stockDisplay = document.getElementById('stockDisplay');
             const buyBtn = document.getElementById('buyBtn');
 
-            if(stockDisplay) {
+            // Handle UI based on Stock
+            if (stockDisplay) {
                 if (currentStock < 30) {
                     stockDisplay.innerText = "SOLD OUT";
                     stockDisplay.classList.add("stock-low");
@@ -107,7 +108,7 @@ window.updateQty = (change) => {
     let newVal = current + change;
     if(newVal < 30) newVal = 30;
     
-    // Cap at stock level to prevent over-ordering
+    // Cap at stock level (Prevent ordering more than available)
     if(newVal > currentStock && currentStock > 0) newVal = currentStock;
     
     display.innerText = newVal;
@@ -121,7 +122,7 @@ window.initiateOrder = () => {
     }
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     
-    // Double Check Stock
+    // Double Check Stock before payment
     if (quantity > currentStock) return alert("Sorry! We don't have enough stock for that order.");
 
     const total = quantity * currentEggPrice;
@@ -131,12 +132,13 @@ window.initiateOrder = () => {
 };
 
 // ==========================================
-// 🔥 ROBUST VERIFICATION LOGIC
+// 🔥 ROBUST VERIFICATION LOGIC (FIXED)
 // ==========================================
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
     const btn = document.getElementById('payBtn');
     
+    // 1. Basic Validation
     if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
 
     const quantity = parseInt(document.getElementById('shopQty').innerText);
@@ -146,52 +148,54 @@ window.verifyPayment = async () => {
     btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking Database (30s)...`;
 
     let attempts = 0;
-    const maxAttempts = 10; 
+    const maxAttempts = 10; // Check for ~30 seconds (10 * 3s)
 
     const pollLoop = setInterval(async () => {
         attempts++;
         console.log(`🔎 Check #${attempts} for code: ${codeInput}`);
 
         try {
-            // CHECK DATABASE
+            // 2. CHECK DATABASE for the code
             const docRef = doc(db, "mpesa_payments", codeInput);
             const docSnap = await getDoc(docRef);
 
             if (docSnap.exists()) {
                 const data = docSnap.data();
 
+                // 3. STOP POLLING - FOUND THE CODE
                 clearInterval(pollLoop);
                 
-                // CHECK IF USED
+                // 4. CHECK IF ALREADY USED
                 if (data.used) {
                     alert("❌ SCAM ALERT: This M-Pesa code has already been used!");
                     resetBtn();
                     return;
                 }
 
-                // STRICT AMOUNT CHECK
+                // 5. 🔥 STRICT AMOUNT CHECK 🔥
                 if (data.amount < expectedTotal) {
-                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${data.amount}\n\nTransaction rejected.`);
+                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${data.amount}\n\nTransaction rejected due to insufficient funds.`);
                     resetBtn();
                     return;
                 }
 
-                // MARK USED
+                // 6. SUCCESS! MARK AS USED IMMEDIATELY
                 await updateDoc(docRef, { 
                     used: true, 
                     usedBy: auth.currentUser.uid,
                     claimedAt: new Date()
                 });
 
-                // CREATE ORDER
+                // 7. CREATE ORDER & DECREASE STOCK
                 await finalizeOrder(codeInput, data.phone); 
                 document.getElementById('mpesa-modal').style.display = 'none';
                 resetBtn();
 
             } else {
+                // NOT FOUND YET
                 if (attempts >= maxAttempts) {
                     clearInterval(pollLoop);
-                    alert("❌ Payment Code Not Found.\nEnsure Admin has received the SMS.");
+                    alert("❌ Payment Code Not Found.\n\n1. Ensure Admin has received the SMS.\n2. Ensure code matches exactly.\n3. Contact Support if deducted.");
                     resetBtn();
                 }
             }
@@ -230,7 +234,7 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
     };
 
     try {
-        // 1. SAVE ORDER
+        // 1. SAVE ORDER TO ORDERS COLLECTION
         await addDoc(collection(db, "orders"), {
             userId: auth.currentUser.uid,
             userName: auth.currentUser.displayName || "Customer",
@@ -248,10 +252,15 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
         });
 
         // 2. 🔥 DECREASE STOCK AUTOMATICALLY 🔥
-        // We use setDoc with merge:true to safely handle cases where the inventory doc 
-        // might be missing or malformed, preventing the order from crashing.
+        // This calculates [Current Stock] - [Quantity Ordered]
         const inventoryRef = doc(db, "config", "inventory");
-        await setDoc(inventoryRef, { quantity: increment(-quantity) }, { merge: true });
+        
+        // Ensure the doc exists before updating, or catch error gracefully
+        try {
+            await updateDoc(inventoryRef, { quantity: increment(-quantity) });
+        } catch (stockErr) {
+            console.warn("Could not update stock count automatically. Admin check required.", stockErr);
+        }
 
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
         
@@ -273,59 +282,40 @@ function generateWhatsAppLink(qty, total, loc, code) {
 
 // --- RECEIPT GENERATOR (jsPDF) ---
 window.downloadReceipt = (orderId, dateStr, item, qty, total, mpesa) => {
-    // Check if jsPDF is loaded
-    if (!window.jspdf) return alert("Receipt generator is loading. Please try again in a few seconds.");
-    
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    // Branding
-    doc.setFillColor(255, 179, 0); // Egg Yellow
-    doc.circle(25, 25, 5, 'F');
     doc.setFontSize(22);
-    doc.setTextColor(50, 50, 50); 
-    doc.text("EggMaster", 35, 28);
+    doc.setTextColor(255, 179, 0); // Egg Yellow
+    doc.text("EggMaster Wholesale", 20, 20);
     
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text("Wholesale Supply", 35, 34);
-
-    // Header
-    doc.setFontSize(16);
-    doc.setTextColor(0, 0, 0);
-    doc.text("PAYMENT RECEIPT", 140, 28);
-    
-    doc.setLineWidth(0.5);
-    doc.line(20, 45, 190, 45);
-
-    // Order Details
     doc.setFontSize(12);
-    doc.text(`Order ID: #${orderId.slice(0,6).toUpperCase()}`, 20, 60);
-    doc.text(`Date: ${dateStr}`, 20, 70);
-    doc.text(`Customer: ${auth.currentUser.displayName || 'Client'}`, 20, 80);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Official Receipt", 20, 30);
+    doc.line(20, 32, 190, 32);
 
-    // Table Header
+    doc.text(`Order ID: #${orderId.slice(0,6)}`, 20, 45);
+    doc.text(`Date: ${dateStr}`, 20, 52);
+    doc.text(`Customer: ${auth.currentUser.displayName || 'Client'}`, 20, 59);
+
     doc.setFillColor(240, 240, 240);
-    doc.rect(20, 95, 170, 12, 'F');
+    doc.rect(20, 70, 170, 10, 'F');
     doc.setFont(undefined, 'bold');
-    doc.text("Description", 25, 103);
-    doc.text("Qty", 120, 103);
-    doc.text("Total", 165, 103);
+    doc.text("Description", 25, 76);
+    doc.text("Qty", 100, 76);
+    doc.text("Total", 160, 76);
 
-    // Table Content
     doc.setFont(undefined, 'normal');
-    doc.text(item, 25, 120);
-    doc.text(qty.toString(), 120, 120);
-    doc.text(`Ksh ${total.toLocaleString()}`, 165, 120);
+    doc.text(item, 25, 90);
+    doc.text(qty.toString(), 100, 90);
+    doc.text(`Ksh ${total}`, 160, 90);
 
-    doc.line(20, 130, 190, 130);
+    doc.line(20, 100, 190, 100);
 
-    // Payment Info
     doc.setFont(undefined, 'bold');
-    doc.text(`M-PESA REF: ${mpesa}`, 20, 145);
-    
-    doc.setTextColor(46, 125, 50); // Green
-    doc.text("PAID & VERIFIED", 150, 145);
+    doc.text(`PAID VIA M-PESA: ${mpesa}`, 20, 115);
+    doc.setTextColor(46, 125, 50);
+    doc.text("PAYMENT VERIFIED", 20, 122);
 
     doc.save(`receipt_${orderId.slice(0,6)}.pdf`);
 };
@@ -540,7 +530,6 @@ function listenToOrders() {
                 const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Delivery Code: ${o.deliveryCode}</small>` : '';
                 const date = o.createdAt.toDate ? o.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString();
                 
-                // ADDED RECEIPT BUTTON
                 list.innerHTML += `
                 <div class="mini-order" style="margin-bottom:10px;">
                     <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
@@ -549,7 +538,7 @@ function listenToOrders() {
                         <small>${o.status} • ${o.address}</small>
                         ${codeHtml}
                         <br>
-                        <button class="receipt-btn" onclick="window.downloadReceipt('${o.deliveryCode || "ORDER"}', '${date}', '${o.item}', ${o.quantity}, ${o.totalPrice}, '${o.mpesaCode}')">
+                        <button class="receipt-btn" onclick="window.downloadReceipt('${o.id || "ORDER"}', '${date}', '${o.item}', ${o.quantity}, ${o.totalPrice}, '${o.mpesaCode}')">
                             <i class="fa-solid fa-file-invoice"></i> Receipt
                         </button>
                     </div>
@@ -572,7 +561,6 @@ const heroBtn = document.getElementById('heroOrderBtn');
 if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
-
 
 // --- TEST FUNCTION ---
 window.simulateTestPayment = async () => {
@@ -598,3 +586,4 @@ window.simulateTestPayment = async () => {
         console.error(e);
     }
 };
+
