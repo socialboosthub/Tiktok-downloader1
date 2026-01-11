@@ -43,7 +43,7 @@ onAuthStateChanged(auth, async (user) => {
         
         updateUIWithUser(user);
         await loadUserSettings();
-        fetchLivePriceAndStock(); // UPDATED FUNCTION
+        fetchLivePriceAndStock(); 
         listenToOrders();
         listenToNotifications(); 
     } else {
@@ -84,14 +84,24 @@ async function fetchLivePriceAndStock() {
             const stockDisplay = document.getElementById('stockDisplay');
             const buyBtn = document.getElementById('buyBtn');
 
-            if (currentStock < 30) {
-                stockDisplay.innerText = "SOLD OUT";
-                stockDisplay.classList.add("stock-low");
-                if(buyBtn) { buyBtn.disabled = true; buyBtn.innerText = "Out of Stock"; }
-            } else {
-                stockDisplay.innerText = `Stock Available: ${currentStock} Trays`;
-                stockDisplay.classList.remove("stock-low");
-                if(buyBtn) { buyBtn.disabled = false; buyBtn.innerHTML = '<i class="fa-solid fa-cart-plus"></i> Buy Now'; }
+            if (stockDisplay) {
+                if (currentStock < 30) {
+                    stockDisplay.innerText = "SOLD OUT";
+                    stockDisplay.classList.add("stock-low");
+                    if(buyBtn) { 
+                        buyBtn.disabled = true; 
+                        buyBtn.innerText = "Out of Stock"; 
+                        buyBtn.style.backgroundColor = "#ccc";
+                    }
+                } else {
+                    stockDisplay.innerText = `Stock Available: ${currentStock} Trays`;
+                    stockDisplay.classList.remove("stock-low");
+                    if(buyBtn) { 
+                        buyBtn.disabled = false; 
+                        buyBtn.innerHTML = '<i class="fa-solid fa-cart-plus"></i> Buy Now'; 
+                        buyBtn.style.backgroundColor = "#1A1D1F"; // Reset color
+                    }
+                }
             }
         });
 
@@ -103,10 +113,15 @@ window.updateQty = (change) => {
     const display = document.getElementById('shopQty');
     let current = parseInt(display.innerText);
     let newVal = current + change;
+    
+    // Minimum 30
     if(newVal < 30) newVal = 30;
     
-    // Cap at stock level
-    if(newVal > currentStock && currentStock > 0) newVal = currentStock;
+    // Cap at stock level if stock is valid
+    if(currentStock > 0 && newVal > currentStock) {
+        newVal = currentStock;
+        alert(`Only ${currentStock} trays remaining!`);
+    }
     
     display.innerText = newVal;
 };
@@ -119,8 +134,8 @@ window.initiateOrder = () => {
     }
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     
-    // Double Check Stock
-    if (quantity > currentStock) return alert("Sorry! We don't have enough stock for that order.");
+    // Double Check Stock before opening payment
+    if (quantity > currentStock) return alert("Sorry! Not enough stock.");
 
     const total = quantity * currentEggPrice;
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
@@ -129,7 +144,7 @@ window.initiateOrder = () => {
 };
 
 // ==========================================
-// 🔥 ROBUST VERIFICATION LOGIC (With Strict Amount Check)
+// 🔥 ROBUST VERIFICATION LOGIC
 // ==========================================
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
@@ -145,7 +160,7 @@ window.verifyPayment = async () => {
     btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking Database (30s)...`;
 
     let attempts = 0;
-    const maxAttempts = 10; // Check for ~30 seconds (10 * 3s)
+    const maxAttempts = 10; // Check for ~30 seconds
 
     const pollLoop = setInterval(async () => {
         attempts++;
@@ -176,7 +191,7 @@ window.verifyPayment = async () => {
                     return;
                 }
 
-                // 6. SUCCESS! MARK AS USED IMMEDIATELY
+                // 6. SUCCESS! MARK AS USED
                 await updateDoc(docRef, { 
                     used: true, 
                     usedBy: auth.currentUser.uid,
@@ -249,6 +264,7 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
         });
 
         // 2. 🔥 DECREASE STOCK AUTOMATICALLY 🔥
+        // This 'increment(-quantity)' is the magic that reduces stock securely
         const inventoryRef = doc(db, "config", "inventory");
         await updateDoc(inventoryRef, { quantity: increment(-quantity) });
 
@@ -272,6 +288,9 @@ function generateWhatsAppLink(qty, total, loc, code) {
 
 // --- RECEIPT GENERATOR (jsPDF) ---
 window.downloadReceipt = (orderId, dateStr, item, qty, total, mpesa) => {
+    // Ensure jsPDF is loaded
+    if(!window.jspdf) return alert("PDF Generator not loaded yet. Please wait.");
+    
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
@@ -518,9 +537,8 @@ function listenToOrders() {
             list.innerHTML = "";
             docs.forEach(o => {
                 const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Delivery Code: ${o.deliveryCode}</small>` : '';
-                const date = o.createdAt.toDate ? o.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString();
+                const date = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString();
                 
-                // ADDED RECEIPT BUTTON
                 list.innerHTML += `
                 <div class="mini-order" style="margin-bottom:10px;">
                     <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
@@ -529,7 +547,7 @@ function listenToOrders() {
                         <small>${o.status} • ${o.address}</small>
                         ${codeHtml}
                         <br>
-                        <button class="receipt-btn" onclick="window.downloadReceipt('${doc.id}', '${date}', '${o.item}', ${o.quantity}, ${o.totalPrice}, '${o.mpesaCode}')">
+                        <button class="receipt-btn" onclick="window.downloadReceipt('${o.deliveryCode || "ORDER"}', '${date}', '${o.item}', ${o.quantity}, ${o.totalPrice}, '${o.mpesaCode}')">
                             <i class="fa-solid fa-file-invoice"></i> Receipt
                         </button>
                     </div>
@@ -552,7 +570,6 @@ const heroBtn = document.getElementById('heroOrderBtn');
 if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
-
 
 // --- TEST FUNCTION ---
 window.simulateTestPayment = async () => {
