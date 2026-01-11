@@ -321,13 +321,14 @@
                         if(isSuper) buttons += `<button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; background:#999; color:white; border:none; padding:8px; border-radius:6px; font-size:12px;">Force</button>`;
                     }
 
-                    // Map Logic
+                    // Map Logic Fixed here
                     let mapLink = "#";
                     if (o.locationCoords && o.locationCoords.lat && o.locationCoords.lng) {
-                        mapLink = `https://www.google.com/maps/search/?api=1&query=${o.locationCoords.lat},${o.locationCoords.lng}`;
+                        // Standard Google Maps link
+                        mapLink = `https://www.google.com/maps?q=${o.locationCoords.lat},${o.locationCoords.lng}`;
                     } else {
                         const addressQuery = encodeURIComponent(o.address + ", Mombasa");
-                        mapLink = `https://www.google.com/maps/search/?api=1&query=${addressQuery}`;
+                        mapLink = `https://www.google.com/maps?q=${addressQuery}`;
                     }
 
                     const codeDisplay = isSuper 
@@ -368,4 +369,3 @@
     </script>
 </body>
 </html>
-
