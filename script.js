@@ -84,23 +84,15 @@ async function fetchLivePriceAndStock() {
             const stockDisplay = document.getElementById('stockDisplay');
             const buyBtn = document.getElementById('buyBtn');
 
-            if (stockDisplay) {
+            if(stockDisplay) {
                 if (currentStock < 30) {
                     stockDisplay.innerText = "SOLD OUT";
                     stockDisplay.classList.add("stock-low");
-                    if(buyBtn) { 
-                        buyBtn.disabled = true; 
-                        buyBtn.innerText = "Out of Stock"; 
-                        buyBtn.style.backgroundColor = "#ccc";
-                    }
+                    if(buyBtn) { buyBtn.disabled = true; buyBtn.innerText = "Out of Stock"; }
                 } else {
                     stockDisplay.innerText = `Stock Available: ${currentStock} Trays`;
                     stockDisplay.classList.remove("stock-low");
-                    if(buyBtn) { 
-                        buyBtn.disabled = false; 
-                        buyBtn.innerHTML = '<i class="fa-solid fa-cart-plus"></i> Buy Now'; 
-                        buyBtn.style.backgroundColor = "#1A1D1F"; // Reset color
-                    }
+                    if(buyBtn) { buyBtn.disabled = false; buyBtn.innerHTML = '<i class="fa-solid fa-cart-plus"></i> Buy Now'; }
                 }
             }
         });
@@ -113,15 +105,10 @@ window.updateQty = (change) => {
     const display = document.getElementById('shopQty');
     let current = parseInt(display.innerText);
     let newVal = current + change;
-    
-    // Minimum 30
     if(newVal < 30) newVal = 30;
     
-    // Cap at stock level if stock is valid
-    if(currentStock > 0 && newVal > currentStock) {
-        newVal = currentStock;
-        alert(`Only ${currentStock} trays remaining!`);
-    }
+    // Cap at stock level to prevent over-ordering
+    if(newVal > currentStock && currentStock > 0) newVal = currentStock;
     
     display.innerText = newVal;
 };
@@ -134,8 +121,8 @@ window.initiateOrder = () => {
     }
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     
-    // Double Check Stock before opening payment
-    if (quantity > currentStock) return alert("Sorry! Not enough stock.");
+    // Double Check Stock
+    if (quantity > currentStock) return alert("Sorry! We don't have enough stock for that order.");
 
     const total = quantity * currentEggPrice;
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
@@ -150,7 +137,6 @@ window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
     const btn = document.getElementById('payBtn');
     
-    // 1. Basic Validation
     if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
 
     const quantity = parseInt(document.getElementById('shopQty').innerText);
@@ -160,54 +146,52 @@ window.verifyPayment = async () => {
     btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking Database (30s)...`;
 
     let attempts = 0;
-    const maxAttempts = 10; // Check for ~30 seconds
+    const maxAttempts = 10; 
 
     const pollLoop = setInterval(async () => {
         attempts++;
         console.log(`🔎 Check #${attempts} for code: ${codeInput}`);
 
         try {
-            // 2. CHECK DATABASE for the code
+            // CHECK DATABASE
             const docRef = doc(db, "mpesa_payments", codeInput);
             const docSnap = await getDoc(docRef);
 
             if (docSnap.exists()) {
                 const data = docSnap.data();
 
-                // 3. STOP POLLING - FOUND THE CODE
                 clearInterval(pollLoop);
                 
-                // 4. CHECK IF ALREADY USED
+                // CHECK IF USED
                 if (data.used) {
                     alert("❌ SCAM ALERT: This M-Pesa code has already been used!");
                     resetBtn();
                     return;
                 }
 
-                // 5. 🔥 STRICT AMOUNT CHECK 🔥
+                // STRICT AMOUNT CHECK
                 if (data.amount < expectedTotal) {
-                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${data.amount}\n\nTransaction rejected due to insufficient funds.`);
+                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${data.amount}\n\nTransaction rejected.`);
                     resetBtn();
                     return;
                 }
 
-                // 6. SUCCESS! MARK AS USED
+                // MARK USED
                 await updateDoc(docRef, { 
                     used: true, 
                     usedBy: auth.currentUser.uid,
                     claimedAt: new Date()
                 });
 
-                // 7. CREATE ORDER & DECREASE STOCK
+                // CREATE ORDER
                 await finalizeOrder(codeInput, data.phone); 
                 document.getElementById('mpesa-modal').style.display = 'none';
                 resetBtn();
 
             } else {
-                // NOT FOUND YET
                 if (attempts >= maxAttempts) {
                     clearInterval(pollLoop);
-                    alert("❌ Payment Code Not Found.\n\n1. Ensure Admin has received the SMS.\n2. Ensure code matches exactly.\n3. Contact Support if deducted.");
+                    alert("❌ Payment Code Not Found.\nEnsure Admin has received the SMS.");
                     resetBtn();
                 }
             }
@@ -264,9 +248,10 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
         });
 
         // 2. 🔥 DECREASE STOCK AUTOMATICALLY 🔥
-        // This 'increment(-quantity)' is the magic that reduces stock securely
+        // We use setDoc with merge:true to safely handle cases where the inventory doc 
+        // might be missing or malformed, preventing the order from crashing.
         const inventoryRef = doc(db, "config", "inventory");
-        await updateDoc(inventoryRef, { quantity: increment(-quantity) });
+        await setDoc(inventoryRef, { quantity: increment(-quantity) }, { merge: true });
 
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
         
@@ -288,43 +273,59 @@ function generateWhatsAppLink(qty, total, loc, code) {
 
 // --- RECEIPT GENERATOR (jsPDF) ---
 window.downloadReceipt = (orderId, dateStr, item, qty, total, mpesa) => {
-    // Ensure jsPDF is loaded
-    if(!window.jspdf) return alert("PDF Generator not loaded yet. Please wait.");
+    // Check if jsPDF is loaded
+    if (!window.jspdf) return alert("Receipt generator is loading. Please try again in a few seconds.");
     
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
+    // Branding
+    doc.setFillColor(255, 179, 0); // Egg Yellow
+    doc.circle(25, 25, 5, 'F');
     doc.setFontSize(22);
-    doc.setTextColor(255, 179, 0); // Egg Yellow
-    doc.text("EggMaster Wholesale", 20, 20);
+    doc.setTextColor(50, 50, 50); 
+    doc.text("EggMaster", 35, 28);
     
-    doc.setFontSize(12);
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Wholesale Supply", 35, 34);
+
+    // Header
+    doc.setFontSize(16);
     doc.setTextColor(0, 0, 0);
-    doc.text("Official Receipt", 20, 30);
-    doc.line(20, 32, 190, 32);
+    doc.text("PAYMENT RECEIPT", 140, 28);
+    
+    doc.setLineWidth(0.5);
+    doc.line(20, 45, 190, 45);
 
-    doc.text(`Order ID: #${orderId.slice(0,6)}`, 20, 45);
-    doc.text(`Date: ${dateStr}`, 20, 52);
-    doc.text(`Customer: ${auth.currentUser.displayName || 'Client'}`, 20, 59);
+    // Order Details
+    doc.setFontSize(12);
+    doc.text(`Order ID: #${orderId.slice(0,6).toUpperCase()}`, 20, 60);
+    doc.text(`Date: ${dateStr}`, 20, 70);
+    doc.text(`Customer: ${auth.currentUser.displayName || 'Client'}`, 20, 80);
 
+    // Table Header
     doc.setFillColor(240, 240, 240);
-    doc.rect(20, 70, 170, 10, 'F');
+    doc.rect(20, 95, 170, 12, 'F');
     doc.setFont(undefined, 'bold');
-    doc.text("Description", 25, 76);
-    doc.text("Qty", 100, 76);
-    doc.text("Total", 160, 76);
+    doc.text("Description", 25, 103);
+    doc.text("Qty", 120, 103);
+    doc.text("Total", 165, 103);
 
+    // Table Content
     doc.setFont(undefined, 'normal');
-    doc.text(item, 25, 90);
-    doc.text(qty.toString(), 100, 90);
-    doc.text(`Ksh ${total}`, 160, 90);
+    doc.text(item, 25, 120);
+    doc.text(qty.toString(), 120, 120);
+    doc.text(`Ksh ${total.toLocaleString()}`, 165, 120);
 
-    doc.line(20, 100, 190, 100);
+    doc.line(20, 130, 190, 130);
 
+    // Payment Info
     doc.setFont(undefined, 'bold');
-    doc.text(`PAID VIA M-PESA: ${mpesa}`, 20, 115);
-    doc.setTextColor(46, 125, 50);
-    doc.text("PAYMENT VERIFIED", 20, 122);
+    doc.text(`M-PESA REF: ${mpesa}`, 20, 145);
+    
+    doc.setTextColor(46, 125, 50); // Green
+    doc.text("PAID & VERIFIED", 150, 145);
 
     doc.save(`receipt_${orderId.slice(0,6)}.pdf`);
 };
@@ -537,8 +538,9 @@ function listenToOrders() {
             list.innerHTML = "";
             docs.forEach(o => {
                 const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Delivery Code: ${o.deliveryCode}</small>` : '';
-                const date = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString();
+                const date = o.createdAt.toDate ? o.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString();
                 
+                // ADDED RECEIPT BUTTON
                 list.innerHTML += `
                 <div class="mini-order" style="margin-bottom:10px;">
                     <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
@@ -570,6 +572,7 @@ const heroBtn = document.getElementById('heroOrderBtn');
 if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelectorAll('.nav-item')[1]);
 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
+
 
 // --- TEST FUNCTION ---
 window.simulateTestPayment = async () => {
