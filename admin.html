@@ -33,17 +33,18 @@
         .admin-container { max-width: 800px; margin: 0 auto; padding: 20px; }
         .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
         
-        .super-section {
-            background: #E8F5E9; border: 2px solid #4CAF50; padding: 20px;
+        .payment-recorder {
+            background: #fff; border: 2px dashed #4CAF50; padding: 20px;
             border-radius: 16px; margin-bottom: 20px; display: none; /* Hidden by default */
         }
-        .super-section h4 { margin-top: 0; color: #2E7D32; }
-
+        .payment-recorder h4 { margin-top: 0; color: #2E7D32; }
         .payment-recorder textarea {
             width: 100%; height: 80px; padding: 10px; border-radius: 8px;
-            border: 1px solid #ccc; font-family: inherit; font-size: 13px; resize: none;
+            border: 1px solid #ccc; font-family: inherit; font-size: 13px;
+            resize: none;
         }
 
+        .price-editor { background: #E3F2FD; padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid #BBDEFB; }
         .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .order-header { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
         .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
@@ -95,31 +96,20 @@
             </button>
         </div>
 
-        <div id="superAdminSection" class="super-section">
-            <h4 style="border-bottom:1px solid #4CAF50; padding-bottom:5px; margin-bottom:10px;">SUPER ADMIN CONTROLS</h4>
-            
-            <div style="margin-bottom: 20px;">
-                <label style="font-size:12px; font-weight:bold;">Current Inventory (Trays)</label>
-                <div style="display:flex; gap:10px; margin-top:5px;">
-                    <input type="number" id="adminStockInput" style="padding:10px; border-radius:8px; border:1px solid #ccc; width:120px;">
-                    <button onclick="updateStock()" style="padding:10px 20px; background:#4CAF50; color:white; border:none; border-radius:8px; cursor:pointer;">Set Stock</button>
-                </div>
-            </div>
+        <div class="payment-recorder" id="manualEntrySection">
+            <h4><i class="fa-solid fa-comment-dollar"></i> Manual M-Pesa Entry</h4>
+            <p style="font-size:12px; color:#555; margin:5px 0;">Backup Method: Paste SMS here if the auto-forwarder fails.</p>
+            <textarea id="mpesaSmsInput" placeholder="Paste SMS here (e.g. UA5KK2UVTQ Confirmed...)"></textarea>
+            <button onclick="parseAndSavePayment()" style="margin-top:10px; width:100%; padding:10px; background:#4CAF50; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">
+                Save Payment
+            </button>
+        </div>
 
-            <div style="margin-bottom: 20px;">
-                <label style="font-size:12px; font-weight:bold;">Unit Price (Ksh)</label>
-                <div style="display:flex; gap:10px; margin-top:5px;">
-                    <input type="number" id="adminPriceInput" style="padding:10px; border-radius:8px; border:1px solid #ccc; width:120px;">
-                    <button onclick="updateGlobalPrice()" style="padding:10px 20px; background:#1976D2; color:white; border:none; border-radius:8px; cursor:pointer;">Set Price</button>
-                </div>
-            </div>
-
-            <div class="payment-recorder">
-                <label style="font-size:12px; font-weight:bold;">Manual Payment Entry (Backup)</label>
-                <textarea id="mpesaSmsInput" placeholder="Paste SMS here (e.g. UA5KK2UVTQ Confirmed...)"></textarea>
-                <button onclick="parseAndSavePayment()" style="margin-top:10px; width:100%; padding:10px; background:#607D8B; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">
-                    Save Payment
-                </button>
+        <div class="price-editor" id="priceEditor">
+            <h4><i class="fa-solid fa-tag"></i> Set Wholesale Price</h4>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input type="number" id="adminPriceInput" style="padding:10px; border-radius:8px; border:1px solid #ccc; width:100px;">
+                <button onclick="updateGlobalPrice()" style="padding:10px 20px; background:#1976D2; color:white; border:none; border-radius:8px; cursor:pointer;">Update Price</button>
             </div>
         </div>
 
@@ -203,51 +193,7 @@
 
         window.logoutAdmin = () => signOut(auth).then(() => window.location.href = 'index.html');
 
-        // --- DASHBOARD FUNCTIONS ---
-        function initDashboard(role) {
-            const isSuper = (role === "SUPER");
-            loadOrders(isSuper);
-
-            if(isSuper) {
-                // Show SUPER ADMIN SECTION
-                document.getElementById('superAdminSection').style.display = 'block';
-                loadConfig(); // Load Price & Stock
-            } else {
-                document.getElementById('dashboardTitle').innerText = "Delivery Dashboard";
-            }
-        }
-
-        async function loadConfig() {
-            // Load Price
-            const priceSnap = await getDoc(doc(db, "config", "pricing"));
-            if (priceSnap.exists()) document.getElementById('adminPriceInput').value = priceSnap.data().currentPrice;
-            
-            // Load Stock
-            const stockSnap = await getDoc(doc(db, "config", "inventory"));
-            if (stockSnap.exists()) document.getElementById('adminStockInput').value = stockSnap.data().quantity || 0;
-            else document.getElementById('adminStockInput').value = 0;
-        }
-
-        // --- SUPER ADMIN ACTIONS ---
-        window.updateGlobalPrice = async () => {
-            const newPrice = parseInt(document.getElementById('adminPriceInput').value);
-            if(newPrice < 1) return alert("Invalid price");
-            try {
-                await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
-                alert("Price updated to " + newPrice);
-            } catch (e) { alert("Update failed: " + e.message); }
-        };
-
-        window.updateStock = async () => {
-            const newStock = parseInt(document.getElementById('adminStockInput').value);
-            if(newStock < 0) return alert("Stock cannot be negative");
-            try {
-                // We use setDoc with merge to create it if it doesn't exist
-                await setDoc(doc(db, "config", "inventory"), { quantity: newStock }, { merge: true });
-                alert("Stock Level Updated to: " + newStock);
-            } catch (e) { alert("Update failed: " + e.message); }
-        };
-
+        // --- MANUAL SAVE LOGIC (Backup) ---
         window.parseAndSavePayment = async () => {
             const text = document.getElementById('mpesaSmsInput').value;
             if(!text) return alert("Please paste the SMS first.");
@@ -282,7 +228,36 @@
             } catch(e) { alert("Error saving: " + e.message); }
         };
 
-        // --- ORDER LIST ---
+        // --- DASHBOARD FUNCTIONS ---
+        function initDashboard(role) {
+            const isSuper = (role === "SUPER");
+            loadOrders(isSuper);
+
+            if(isSuper) {
+                loadPrice();
+                document.getElementById('manualEntrySection').style.display = 'block'; // Show manual entry for Super Admin
+            } else {
+                document.getElementById('priceEditor').style.display = 'none';
+                document.getElementById('manualEntrySection').style.display = 'none'; // Hide for others
+                document.getElementById('dashboardTitle').innerText = "Delivery Dashboard";
+            }
+        }
+
+        async function loadPrice() {
+            const docSnap = await getDoc(doc(db, "config", "pricing"));
+            if (docSnap.exists()) document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
+            else document.getElementById('adminPriceInput').value = 385; 
+        }
+
+        window.updateGlobalPrice = async () => {
+            const newPrice = parseInt(document.getElementById('adminPriceInput').value);
+            if(newPrice < 1) return alert("Invalid price");
+            try {
+                await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
+                alert("Price updated to " + newPrice);
+            } catch (e) { alert("Update failed: " + e.message); }
+        };
+
         window.verifyDeliveryCode = async (orderId) => {
             const codeInput = prompt("Ask customer for the 5-char Delivery Code:");
             if (!codeInput) return;
@@ -321,16 +296,16 @@
                         if(isSuper) buttons += `<button onclick="markDeliveredForce('${docSnap.id}')" style="margin-left:5px; background:#999; color:white; border:none; padding:8px; border-radius:6px; font-size:12px;">Force</button>`;
                     }
 
-                    // Map Logic Fixed here
-                    let mapLink = "#";
-                    if (o.locationCoords && o.locationCoords.lat && o.locationCoords.lng) {
-                        // Standard Google Maps link
-                        mapLink = `https://www.google.com/maps?q=${o.locationCoords.lat},${o.locationCoords.lng}`;
-                    } else {
-                        const addressQuery = encodeURIComponent(o.address + ", Mombasa");
-                        mapLink = `https://www.google.com/maps?q=${addressQuery}`;
-                    }
 
+                  let mapLink = "#";
+                    if (o.locationCoords && o.locationCoords.lat) {
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=\${o.locationCoords.lat},${o.locationCoords.lng}`;
+                    } else {
+                        mapLink = `https://www.google.com/maps/search/?api=1&query=\${encodeURIComponent(o.address + ', Mombasa')}`;
+                    }  
+
+
+                    // SECURITY CHECK: Only show Delivery Code if Super Admin
                     const codeDisplay = isSuper 
                         ? `<small style="background:#eee; padding:2px 6px; border-radius:4px; color:#555;">Code: <b>${o.deliveryCode}</b></small>` 
                         : `<small style="background:#eee; padding:2px 6px; border-radius:4px; color:#555;">Code: 🔒 Hidden</small>`;

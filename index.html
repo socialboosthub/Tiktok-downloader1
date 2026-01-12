@@ -6,22 +6,12 @@
     <title>EggMaster Wholesale</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="style.css">
     <style>
         #stealth-admin-trigger {
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
             width: 20px; height: 20px; background: rgba(255, 255, 255, 0.05);
             border-radius: 50%; z-index: 10000; cursor: pointer;
-        }
-        .stock-badge {
-            background: #E8F5E9; color: #2E7D32; padding: 4px 8px; 
-            border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 5px; display: inline-block;
-        }
-        .stock-low { background: #FFEBEE; color: #C62828; }
-        .receipt-btn {
-            background: #607D8B; color: white; border: none; padding: 5px 10px; 
-            border-radius: 5px; font-size: 11px; cursor: pointer; margin-top: 5px;
         }
     </style>
     <script type="module" src="script.js" defer></script>
@@ -166,9 +156,6 @@
                 <div class="prod-details">
                     <h3 data-i18n="prodTray">Tray of 30</h3>
                     <div class="prod-desc">Fresh Kienyeji Eggs (Yellow Yolk)</div>
-                    
-                    <div id="stockDisplay" class="stock-badge">Checking Stock...</div>
-
                     <div class="price-row"><span>Ksh</span> <span id="dynamicPriceDisplay">...</span> <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
                     <div class="warning-box" style="background:#fff3cd; color:#856404; padding:8px; border-radius:8px; font-size:11px; margin-bottom:10px;">
                         <i class="fa-solid fa-triangle-exclamation"></i> Minimum Order: 30 Trays
@@ -179,7 +166,7 @@
                             <span class="qty-display" id="shopQty">30</span>
                             <button onclick="updateQty(1)">+</button>
                         </div>
-                        <button id="buyBtn" class="add-btn" onclick="window.initiateOrder()">
+                        <button class="add-btn" onclick="window.initiateOrder()">
                             <i class="fa-solid fa-cart-plus"></i> Buy Now
                         </button>
                     </div>
