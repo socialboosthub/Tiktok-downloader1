@@ -245,20 +245,35 @@
             }
         }
 
-        async function loadPrice() {
+
+
+                async function loadPrice() {
             const docSnap = await getDoc(doc(db, "config", "pricing"));
-            if (docSnap.exists()) document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
-            else document.getElementById('adminPriceInput').value = 385; 
+            if (docSnap.exists()) {
+                document.getElementById('adminPriceInput').value = docSnap.data().currentPrice;
+                document.getElementById('adminStockInput').value = docSnap.data().currentStock || 0; // Load Stock
+            }
         }
 
-        window.updateGlobalPrice = async () => {
+
+
+                  window.updateGlobalPrice = async () => {
             const newPrice = parseInt(document.getElementById('adminPriceInput').value);
+            const newStock = parseInt(document.getElementById('adminStockInput').value); // Get Stock Value
+
             if(newPrice < 1) return alert("Invalid price");
+            
             try {
-                await setDoc(doc(db, "config", "pricing"), { currentPrice: newPrice });
-                alert("Price updated to " + newPrice);
+                await setDoc(doc(db, "config", "pricing"), { 
+                    currentPrice: newPrice,
+                    currentStock: newStock // Save Stock
+                }, { merge: true });
+                
+                alert(`✅ Updated!\nPrice: ${newPrice}\nStock: ${newStock}`);
             } catch (e) { alert("Update failed: " + e.message); }
         };
+
+        
 
         window.verifyDeliveryCode = async (orderId) => {
             const codeInput = prompt("Ask customer for the 5-char Delivery Code:");
