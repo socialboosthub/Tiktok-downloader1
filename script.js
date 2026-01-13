@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// ADDED 'writeBatch' to imports below:
+import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -21,8 +22,7 @@ const provider = new GoogleAuthProvider();
 
 let userLocation = null;
 let currentEggPrice = 385; 
-
-let currentStock = 0; // NEW: Track available stock
+let currentStock = 0; 
 
 // Mombasa Areas
 const MOMBASA_AREAS = [
@@ -69,23 +69,20 @@ const loginBtn = document.getElementById('google-login-btn');
 if (loginBtn) loginBtn.onclick = window.handleLogin;
 
 // --- DYNAMIC PRICE ---
-
-
-
 async function fetchLivePrice() {
     try {
         onSnapshot(doc(db, "config", "pricing"), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
                 currentEggPrice = data.currentPrice || 385;
-                currentStock = data.currentStock || 0; // Get stock from DB
+                currentStock = data.currentStock || 0; 
             }
             
             // Update Price Display
             const priceDisplay = document.getElementById('dynamicPriceDisplay');
             if(priceDisplay) priceDisplay.innerText = currentEggPrice;
 
-            // Update Stock Display (NEW)
+            // Update Stock Display
             const stockDisplay = document.getElementById('stockDisplay');
             if(stockDisplay) {
                 if(currentStock > 0) {
@@ -117,7 +114,6 @@ window.initiateOrder = () => {
     if (!userLocation || !userLocation.address) {
         if(confirm("⚠️ Delivery Location Missing!\n\nPlease set your location to continue.")) {
             window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
-            // Small delay to ensure page transition before opening modal
             setTimeout(() => window.initLocationFlow(), 500);
         }
         return;
@@ -130,7 +126,6 @@ window.initiateOrder = () => {
         return alert(`⚠️ Not enough stock!\n\nAvailable: ${currentStock} Trays\nYou want: ${quantity} Trays\n\nPlease reduce quantity.`);
     }
 
-    
     const total = quantity * currentEggPrice;
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
     document.getElementById('mpesaCodeInput').value = "";
@@ -138,8 +133,18 @@ window.initiateOrder = () => {
 };
 
 // ==========================================
-// 🔥 PAYMENT VERIFICATION LOGIC
+// 🔥 REWRITTEN PAYMENT & ORDER SYSTEM (FIXED)
 // ==========================================
+
+function generateOrderCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
+    let result = '';
+    for (let i = 0; i < 5; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
     const btn = document.getElementById('payBtn');
@@ -147,7 +152,8 @@ window.verifyPayment = async () => {
     if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
 
     const quantity = parseInt(document.getElementById('shopQty').innerText);
-    const expectedTotal = quantity * currentEggPrice;
+    // STRICT: Ensure we are comparing numbers
+    const expectedTotal = Number(quantity * currentEggPrice);
 
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking Database (30s)...`;
@@ -160,35 +166,93 @@ window.verifyPayment = async () => {
         console.log(`🔎 Check #${attempts} for code: ${codeInput}`);
 
         try {
-            const docRef = doc(db, "mpesa_payments", codeInput);
-            const docSnap = await getDoc(docRef);
+            const mpesaRef = doc(db, "mpesa_payments", codeInput);
+            const docSnap = await getDoc(mpesaRef);
 
             if (docSnap.exists()) {
                 const data = docSnap.data();
-
-                clearInterval(pollLoop);
+                clearInterval(pollLoop); // Stop searching
                 
+                // 1. Check if used
                 if (data.used) {
                     alert("❌ SCAM ALERT: This M-Pesa code has already been used!");
                     resetBtn();
                     return;
                 }
 
-                if (data.amount < expectedTotal) {
-                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${data.amount}\n\nTransaction rejected due to insufficient funds.`);
+                // 2. Strict Price Check (Numbers only)
+                const paidAmount = Number(data.amount);
+                
+                if (paidAmount < expectedTotal) {
+                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${paidAmount}\n\nTransaction rejected due to insufficient funds.`);
                     resetBtn();
                     return;
                 }
 
-                await updateDoc(docRef, { 
-                    used: true, 
-                    usedBy: auth.currentUser.uid,
-                    claimedAt: new Date()
-                });
+                // 3. ATOMIC BATCH WRITE (Solves the "2 Flows" and Permission issues)
+                // Either ALL execute, or NONE execute.
+                try {
+                    const batch = writeBatch(db);
+                    
+                    // A. Prepare Order
+                    const newOrderRef = doc(collection(db, "orders"));
+                    const deliveryCode = generateOrderCode();
+                    const safeLocation = {
+                        lat: (userLocation && userLocation.lat) ? userLocation.lat : null,
+                        lng: (userLocation && userLocation.lng) ? userLocation.lng : null
+                    };
 
-                await finalizeOrder(codeInput, data.phone); 
-                document.getElementById('mpesa-modal').style.display = 'none';
-                resetBtn();
+                    batch.set(newOrderRef, {
+                        userId: auth.currentUser.uid,
+                        userName: auth.currentUser.displayName || "Customer",
+                        item: "Tray of 30", 
+                        unitPrice: currentEggPrice, 
+                        quantity: quantity, 
+                        totalPrice: expectedTotal,
+                        status: 'Pending',
+                        mpesaNumber: data.phone || "Verified", 
+                        mpesaCode: codeInput,
+                        address: userLocation.address,
+                        locationCoords: safeLocation,
+                        deliveryCode: deliveryCode, 
+                        createdAt: new Date()
+                    });
+
+                    // B. Mark Payment Used
+                    batch.update(mpesaRef, { 
+                        used: true, 
+                        usedBy: auth.currentUser.uid,
+                        claimedAt: new Date()
+                    });
+
+                    // C. Update Stock
+                    const stockRef = doc(db, "config", "pricing");
+                    const newStockLevel = currentStock - quantity;
+                    batch.update(stockRef, { currentStock: newStockLevel });
+
+                    // COMMIT ALL AT ONCE
+                    await batch.commit();
+
+                    // --- SUCCESS ---
+                    document.getElementById('mpesa-modal').style.display = 'none';
+                    resetBtn();
+                    
+                    await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
+                    alert(`✅ Payment Verified!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n(Show this to the driver)`);
+                    
+                    window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
+                    generateWhatsAppLink(quantity, expectedTotal, userLocation.address, deliveryCode);
+
+                } catch (batchError) {
+                    console.error("Batch Failed:", batchError);
+                    // This handles the PERMISSION ERROR gracefully
+                    if (batchError.code === 'permission-denied') {
+                        alert("⚠️ SERVER ERROR: Cannot update stock.\nPlease contact Admin to check Firestore Rules for 'config/pricing'.");
+                    } else {
+                        alert("Error processing order: " + batchError.message);
+                    }
+                    resetBtn();
+                }
 
             } else {
                 if (attempts >= maxAttempts) {
@@ -210,63 +274,6 @@ window.verifyPayment = async () => {
         btn.innerHTML = "Verify Payment";
     }
 };
-
-function generateOrderCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
-    let result = '';
-    for (let i = 0; i < 5; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-async function finalizeOrder(mpesaCode, phoneNumber) {
-    const quantity = parseInt(document.getElementById('shopQty').innerText);
-    const totalPrice = quantity * currentEggPrice;
-    const item = "Tray of 30";
-    const deliveryCode = generateOrderCode();
-
-    // Ensure lat/lng are safe to send even if null
-    const safeLocation = {
-        lat: (userLocation && userLocation.lat) ? userLocation.lat : null,
-        lng: (userLocation && userLocation.lng) ? userLocation.lng : null
-    };
-
-    try {
-        await addDoc(collection(db, "orders"), {
-            userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || "Customer",
-            item, 
-            unitPrice: currentEggPrice, 
-            quantity, 
-            totalPrice,
-            status: 'Pending',
-            mpesaNumber: phoneNumber || "Verified", 
-            mpesaCode: mpesaCode,
-            address: userLocation.address,
-            locationCoords: safeLocation,
-            deliveryCode: deliveryCode, 
-            createdAt: new Date()
-        });
-
-                // AUTO-UPDATE STOCK (Deduct sold items)
-        const newStockLevel = currentStock - quantity;
-        await updateDoc(doc(db, "config", "pricing"), { 
-            currentStock: newStockLevel 
-        });
-
-        
-        await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
-        
-        alert(`✅ Payment Verified!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n(Show this to the driver)`);
-        window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
-        generateWhatsAppLink(quantity, totalPrice, userLocation.address, deliveryCode);
-
-    } catch(e) {
-        alert("Error saving order: " + e.message);
-        console.error(e);
-    }
-}
 
 function generateWhatsAppLink(qty, total, loc, code) {
     const btn = document.querySelector('.whatsapp-float');
@@ -338,7 +345,6 @@ async function loadUserSettings() {
             }
             if (data.location) {
                 userLocation = data.location;
-                // Update the visual indicator
                 const locText = document.getElementById('currentCoords');
                 if(locText) locText.innerText = data.location.address;
                 const locTitle = document.getElementById('locationStatus');
@@ -368,7 +374,6 @@ window.changeLanguage = async (lang) => {
 // 📍 FIXED LOCATION LOGIC (GPS + MANUAL)
 // ==========================================
 
-// 1. Triggered by the UI button
 window.initLocationFlow = function() {
     const choice = confirm("Use GPS for exact delivery location?\n\n[OK] = Use GPS (Best for Drivers)\n[Cancel] = Select Area List");
     if (choice) {
@@ -377,10 +382,8 @@ window.initLocationFlow = function() {
             return window.openLocationSearch();
         }
         
-        // Request High Accuracy
         navigator.geolocation.getCurrentPosition(
             async (pos) => {
-                // Success: Save Coordinates
                 userLocation = { 
                     lat: pos.coords.latitude, 
                     lng: pos.coords.longitude, 
@@ -392,7 +395,6 @@ window.initLocationFlow = function() {
                 alert("✅ GPS Location Saved!\nThe driver will see your exact map pin.");
             }, 
             (err) => { 
-                // Error: Fallback to Manual
                 console.error("GPS Error:", err);
                 alert("⚠️ GPS Failed or Denied.\nPlease select your area manually."); 
                 window.openLocationSearch(); 
@@ -404,13 +406,11 @@ window.initLocationFlow = function() {
     }
 };
 
-// 2. Open Manual List
 window.openLocationSearch = () => {
     document.getElementById('location-modal').style.display = 'flex';
     window.renderLocationList(MOMBASA_AREAS);
 };
 
-// 3. Render List Items
 window.renderLocationList = (areas) => {
     const list = document.getElementById('locationList');
     list.innerHTML = '';
@@ -418,22 +418,18 @@ window.renderLocationList = (areas) => {
         const item = document.createElement('div');
         item.className = 'location-item';
         item.innerHTML = `<i class="fa-solid fa-map-pin"></i> ${area}, Mombasa`;
-        // Directly bind the click
         item.onclick = () => window.selectLocation(area + ", Mombasa");
         list.appendChild(item);
     });
 };
 
-// 4. Filter List
 window.filterLocations = () => {
     const queryStr = document.getElementById('locSearch').value.toLowerCase();
     const filtered = MOMBASA_AREAS.filter(a => a.toLowerCase().includes(queryStr));
     window.renderLocationList(filtered);
 };
 
-// 5. Select Manual Location
 window.selectLocation = (address) => {
-    // Manual selection has NO coordinates (null)
     userLocation = { address: address, lat: null, lng: null };
     saveLoc().then(() => {
         document.getElementById('location-modal').style.display = 'none';
@@ -441,15 +437,10 @@ window.selectLocation = (address) => {
     });
 };
 
-// 6. Save to Firebase & Update UI
 async function saveLoc() {
     if(!userLocation) return;
-    
-    // Update UI immediately
     const el = document.getElementById('currentCoords');
     if(el) el.innerText = userLocation.address;
-    
-    // Save to DB
     if(auth.currentUser) {
         await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
     }
