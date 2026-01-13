@@ -145,6 +145,8 @@ function generateOrderCode() {
     return result;
 }
 
+
+
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
     const btn = document.getElementById('payBtn');
@@ -152,51 +154,51 @@ window.verifyPayment = async () => {
     if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
 
     const quantity = parseInt(document.getElementById('shopQty').innerText);
-    // STRICT: Ensure we are comparing numbers
+    
+    // 1. FORCE Cart Total to a Number
     const expectedTotal = Number(quantity * currentEggPrice);
 
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking Database (30s)...`;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying Amount...`;
 
     let attempts = 0;
     const maxAttempts = 10; 
 
     const pollLoop = setInterval(async () => {
         attempts++;
-        console.log(`🔎 Check #${attempts} for code: ${codeInput}`);
-
         try {
             const mpesaRef = doc(db, "mpesa_payments", codeInput);
             const docSnap = await getDoc(mpesaRef);
 
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                clearInterval(pollLoop); // Stop searching
+                clearInterval(pollLoop);
                 
-                // 1. Check if used
                 if (data.used) {
-                    alert("❌ SCAM ALERT: This M-Pesa code has already been used!");
+                    alert("❌ This code was already used for another order.");
                     resetBtn();
                     return;
                 }
 
-                // 2. Strict Price Check (Numbers only)
+                // 2. FORCE M-Pesa Amount to a Number
                 const paidAmount = Number(data.amount);
-                
-                if (paidAmount < expectedTotal) {
-                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${paidAmount}\n\nTransaction rejected due to insufficient funds.`);
+
+                // 3. THE STRICT CHECK (Must be EXACTLY equal)
+                if (paidAmount !== expectedTotal) {
+                    alert(`❌ PAYMENT ERROR: AMOUNT MISMATCH!\n\n` +
+                          `Cart Total: Ksh ${expectedTotal}\n` +
+                          `M-Pesa Sent: Ksh ${paidAmount}\n\n` +
+                          `The amounts must be EXACTLY the same. Please contact support if you overpaid.`);
                     resetBtn();
                     return;
                 }
 
-                // 3. ATOMIC BATCH WRITE (Solves the "2 Flows" and Permission issues)
-                // Either ALL execute, or NONE execute.
+                // 4. PROCEED ONLY IF EXACT MATCH
                 try {
                     const batch = writeBatch(db);
-                    
-                    // A. Prepare Order
                     const newOrderRef = doc(collection(db, "orders"));
                     const deliveryCode = generateOrderCode();
+                    
                     const safeLocation = {
                         lat: (userLocation && userLocation.lat) ? userLocation.lat : null,
                         lng: (userLocation && userLocation.lng) ? userLocation.lng : null
@@ -218,53 +220,39 @@ window.verifyPayment = async () => {
                         createdAt: new Date()
                     });
 
-                    // B. Mark Payment Used
                     batch.update(mpesaRef, { 
                         used: true, 
                         usedBy: auth.currentUser.uid,
                         claimedAt: new Date()
                     });
 
-                    // C. Update Stock
                     const stockRef = doc(db, "config", "pricing");
-                    const newStockLevel = currentStock - quantity;
-                    batch.update(stockRef, { currentStock: newStockLevel });
+                    batch.update(stockRef, { currentStock: currentStock - quantity });
 
-                    // COMMIT ALL AT ONCE
                     await batch.commit();
 
-                    // --- SUCCESS ---
                     document.getElementById('mpesa-modal').style.display = 'none';
                     resetBtn();
-                    
-                    await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
-                    alert(`✅ Payment Verified!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n(Show this to the driver)`);
+                    await createNotification(`Order Success! Code: ${deliveryCode}`);
+                    alert(`✅ Payment Verified!\n\nDELIVERY CODE: ${deliveryCode}`);
                     
                     window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
                     generateWhatsAppLink(quantity, expectedTotal, userLocation.address, deliveryCode);
 
                 } catch (batchError) {
-                    console.error("Batch Failed:", batchError);
-                    // This handles the PERMISSION ERROR gracefully
-                    if (batchError.code === 'permission-denied') {
-                        alert("⚠️ SERVER ERROR: Cannot update stock.\nPlease contact Admin to check Firestore Rules for 'config/pricing'.");
-                    } else {
-                        alert("Error processing order: " + batchError.message);
-                    }
+                    console.error(batchError);
+                    alert("Order failed. Check console for details.");
                     resetBtn();
                 }
 
-            } else {
-                if (attempts >= maxAttempts) {
-                    clearInterval(pollLoop);
-                    alert("❌ Payment Code Not Found.\n\n1. Ensure Admin has received the SMS.\n2. Ensure code matches exactly.");
-                    resetBtn();
-                }
+            } else if (attempts >= maxAttempts) {
+                clearInterval(pollLoop);
+                alert("❌ Code not found in system yet.");
+                resetBtn();
             }
         } catch (err) {
             clearInterval(pollLoop);
-            console.error(err);
-            alert("Connection Error. Please try again.");
+            alert("Connection Error.");
             resetBtn();
         }
     }, 3000); 
@@ -274,6 +262,7 @@ window.verifyPayment = async () => {
         btn.innerHTML = "Verify Payment";
     }
 };
+
 
 function generateWhatsAppLink(qty, total, loc, code) {
     const btn = document.querySelector('.whatsapp-float');
