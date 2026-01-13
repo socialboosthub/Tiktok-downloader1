@@ -22,6 +22,8 @@ const provider = new GoogleAuthProvider();
 let userLocation = null;
 let currentEggPrice = 385; 
 
+let currentStock = 0; // NEW: Track available stock
+
 // Mombasa Areas
 const MOMBASA_AREAS = [
     "Nyali", "Bamburi", "Tudor", "Kizingo", "Mtwapa", "Likoni", 
@@ -67,17 +69,37 @@ const loginBtn = document.getElementById('google-login-btn');
 if (loginBtn) loginBtn.onclick = window.handleLogin;
 
 // --- DYNAMIC PRICE ---
+
+
+
 async function fetchLivePrice() {
     try {
         onSnapshot(doc(db, "config", "pricing"), (doc) => {
             if (doc.exists()) {
-                currentEggPrice = doc.data().currentPrice || 385;
+                const data = doc.data();
+                currentEggPrice = data.currentPrice || 385;
+                currentStock = data.currentStock || 0; // Get stock from DB
             }
+            
+            // Update Price Display
             const priceDisplay = document.getElementById('dynamicPriceDisplay');
             if(priceDisplay) priceDisplay.innerText = currentEggPrice;
+
+            // Update Stock Display (NEW)
+            const stockDisplay = document.getElementById('stockDisplay');
+            if(stockDisplay) {
+                if(currentStock > 0) {
+                    stockDisplay.innerHTML = `<i class="fa-solid fa-boxes-stacked"></i> ${currentStock} Trays Available`;
+                    stockDisplay.style.color = "#2E7D32"; // Green
+                } else {
+                    stockDisplay.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Out of Stock`;
+                    stockDisplay.style.color = "#F44336"; // Red
+                }
+            }
         });
-    } catch(e) { console.error("Error fetching price", e); }
+    } catch(e) { console.error("Error fetching price/stock", e); }
 }
+
 
 // --- ORDER LOGIC ---
 window.updateQty = (change) => {
@@ -102,6 +124,13 @@ window.initiateOrder = () => {
     }
     
     const quantity = parseInt(document.getElementById('shopQty').innerText);
+
+    // CHECK STOCK BEFORE ORDERING
+    if (quantity > currentStock) {
+        return alert(`⚠️ Not enough stock!\n\nAvailable: ${currentStock} Trays\nYou want: ${quantity} Trays\n\nPlease reduce quantity.`);
+    }
+
+    
     const total = quantity * currentEggPrice;
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
     document.getElementById('mpesaCodeInput').value = "";
@@ -219,6 +248,13 @@ async function finalizeOrder(mpesaCode, phoneNumber) {
             deliveryCode: deliveryCode, 
             createdAt: new Date()
         });
+
+                // AUTO-UPDATE STOCK (Deduct sold items)
+        const newStockLevel = currentStock - quantity;
+        await updateDoc(doc(db, "config", "pricing"), { 
+            currentStock: newStockLevel 
+        });
+
         
         await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
         
