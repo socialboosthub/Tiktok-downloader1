@@ -16,6 +16,17 @@
     </style>
     <script type="module" src="script.js" defer></script>
 
+
+    <link rel="manifest" href="manifest.json">
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js')
+        .then(() => console.log("✅ PWA Service Worker Registered"))
+        .catch(err => console.log("❌ PWA Failed", err));
+    }
+</script>
+
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 
@@ -131,7 +142,7 @@
             </div>
             <div class="hero-img">🐓</div>
         </div>
-        <div class="stats-row">
+                <div class="stats-row">
             <div class="stat-card highlight">
                 <i class="fa-solid fa-basket-shopping"></i>
                 <div>
@@ -139,7 +150,24 @@
                     <span data-i18n="statOrders">My Orders</span>
                 </div>
             </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-wallet" style="color: #2E7D32;"></i>
+                <div>
+                    <b id="walletBalanceDisplay">Ksh 0</b>
+                    <span>My Wallet</span>
+                </div>
+            </div>
         </div>
+        
+        <div class="hero-card" style="margin-top:0; background: linear-gradient(135deg, #673AB7 0%, #512DA8 100%);">
+            <div class="hero-text">
+                <span class="tag" style="background:#fff; color:#673AB7;">EARN FREE EGGS</span>
+                <h2 style="font-size:16px; margin: 10px 0;">Share Code: <span id="myRefCode" style="text-decoration:underline; cursor:pointer;">LOADING...</span></h2>
+                <button onclick="window.shareReferral()" style="color:#673AB7;">Share Now</button>
+            </div>
+            <div class="hero-img" style="font-size:50px;">🎁</div>
+        </div>
+
         <div class="section-header">
             <h3 data-i18n="recentActivity">Recent Activity</h3>
         </div>
@@ -223,6 +251,15 @@
                     <span class="slider"></span>
                 </label>
             </div>
+
+                     <div class="setting-item">
+                <div class="icon-wrap color-purple"><i class="fa-solid fa-gift"></i></div>
+                <div class="text">Redeem Code</div>
+                <input type="text" id="referralInput" placeholder="Enter Code" style="border:1px solid #ddd; padding:5px; border-radius:5px; width:100px;">
+                <button onclick="window.redeemReferral()" style="margin-left:5px; background:var(--primary); border:none; padding:5px 10px; border-radius:5px; font-weight:bold;">Go</button>
+            </div>
+
+            
             <div class="setting-item">
                 <div class="icon-wrap color-teal"><i class="fa-solid fa-globe"></i></div>
                 <div class="text" data-i18n="setLanguage">Language</div>
