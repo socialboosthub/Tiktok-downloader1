@@ -24,6 +24,10 @@ let userLocation = null;
 let currentEggPrice = 385; 
 let currentStock = 0; 
 
+let userWallet = 0;
+let myReferralCode = "";
+
+
 // Mombasa Areas
 const MOMBASA_AREAS = [
     "Nyali", "Bamburi", "Tudor", "Kizingo", "Mtwapa", "Likoni", 
@@ -184,14 +188,109 @@ window.verifyPayment = async () => {
                 const paidAmount = Number(data.amount);
 
                 // 3. THE STRICT CHECK (Must be EXACTLY equal)
-                if (paidAmount !== expectedTotal) {
-                    alert(`❌ PAYMENT ERROR: AMOUNT MISMATCH!\n\n` +
-                          `Cart Total: Ksh ${expectedTotal}\n` +
-                          `M-Pesa Sent: Ksh ${paidAmount}\n\n` +
-                          `The amounts must be EXACTLY the same. Please contact support if you overpaid.`);
-                    resetBtn();
-                    return;
+
+                                // --- NEW WALLET LOGIC ---
+                let finalPaid = paidAmount;
+                let walletDeduction = 0;
+                let balanceToAdd = 0;
+                
+                // Case 1: They paid LESS than total (Check Wallet)
+                if (paidAmount < expectedTotal) {
+                    const shortage = expectedTotal - paidAmount;
+                    if (userWallet >= shortage) {
+                        // Use wallet to cover the rest
+                        walletDeduction = shortage;
+                        finalPaid = paidAmount + walletDeduction; // Now it matches expectedTotal
+                        console.log(`Using Ksh ${walletDeduction} from wallet.`);
+                    } else {
+                        alert(`❌ Insufficient Payment!\n\nOrder Total: Ksh ${expectedTotal}\nYou Sent: Ksh ${paidAmount}\nWallet Balance: Ksh ${userWallet}\n\nPlease send the remaining amount.`);
+                        resetBtn();
+                        return;
+                    }
+                } 
+                // Case 2: They paid MORE than total (Add to Wallet)
+                else if (paidAmount > expectedTotal) {
+                    balanceToAdd = paidAmount - expectedTotal;
+                    console.log(`Overpayment of Ksh ${balanceToAdd}. Adding to wallet.`);
                 }
+
+                // Proceed only if the math works out
+                // (Note: We use >= because overpayment is now allowed)
+                if (finalPaid >= expectedTotal) {
+                    try {
+                        const batch = writeBatch(db);
+                        const newOrderRef = doc(collection(db, "orders"));
+                        const deliveryCode = generateOrderCode();
+                        
+                        // ... (Existing Order Data logic here) ...
+                         const safeLocation = {
+                            lat: (userLocation && userLocation.lat) ? userLocation.lat : null,
+                            lng: (userLocation && userLocation.lng) ? userLocation.lng : null
+                        };
+
+                        batch.set(newOrderRef, {
+                            userId: auth.currentUser.uid,
+                            userName: auth.currentUser.displayName || "Customer",
+                            item: "Tray of 30", 
+                            unitPrice: currentEggPrice, 
+                            quantity: quantity, 
+                            totalPrice: expectedTotal, // Record the cost
+                            amountPaid: paidAmount,   // Record actual mpesa
+                            walletUsed: walletDeduction,
+                            status: 'Pending',
+                            mpesaNumber: data.phone || "Verified", 
+                            mpesaCode: codeInput,
+                            address: userLocation.address,
+                            locationCoords: safeLocation,
+                            deliveryCode: deliveryCode, 
+                            createdAt: new Date()
+                        });
+
+                        // Mark M-Pesa Code as Used
+                        batch.update(mpesaRef, { 
+                            used: true, 
+                            usedBy: auth.currentUser.uid,
+                            claimedAt: new Date()
+                        });
+
+                        // Deduct Stock
+                        const stockRef = doc(db, "config", "pricing");
+                        batch.update(stockRef, { currentStock: currentStock - quantity });
+
+                        // --- UPDATE WALLET ---
+                        const userRef = doc(db, "users", auth.currentUser.uid);
+                        if (walletDeduction > 0) {
+                            batch.update(userRef, { walletBalance: userWallet - walletDeduction });
+                        } else if (balanceToAdd > 0) {
+                            batch.update(userRef, { walletBalance: userWallet + balanceToAdd });
+                        }
+
+                        await batch.commit();
+
+                        // Refresh local wallet display
+                        if (walletDeduction > 0) userWallet -= walletDeduction;
+                        if (balanceToAdd > 0) userWallet += balanceToAdd;
+                        document.getElementById('walletBalanceDisplay').innerText = `Ksh ${userWallet}`;
+
+                        document.getElementById('mpesa-modal').style.display = 'none';
+                        resetBtn();
+                        
+                        let msg = `Order Success! Code: ${deliveryCode}`;
+                        if(balanceToAdd > 0) msg += `\n(Ksh ${balanceToAdd} added to your Wallet)`;
+                        
+                        alert(msg);
+                        await createNotification(msg);
+                        
+                        window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
+                        generateWhatsAppLink(quantity, expectedTotal, userLocation.address, deliveryCode);
+
+                    } catch (batchError) {
+                        console.error(batchError);
+                        alert("Order failed. Check console.");
+                        resetBtn();
+                    }
+                }
+
 
                 // 4. PROCEED ONLY IF EXACT MATCH
                 try {
@@ -322,26 +421,48 @@ window.saveProfile = async () => {
     finally { saveBtn.innerText = "Save Changes"; saveBtn.disabled = false; }
 };
 
+
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
-        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const userDoc = await getDoc(userRef);
+        
         if (userDoc.exists()) {
             const data = userDoc.data();
+            
+            // Theme & Location (Existing)
             if (data.theme === 'dark') {
                 document.body.setAttribute('data-theme', 'dark');
                 if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = true;
             }
             if (data.location) {
                 userLocation = data.location;
-                const locText = document.getElementById('currentCoords');
-                if(locText) locText.innerText = data.location.address;
-                const locTitle = document.getElementById('locationStatus');
-                if(locTitle) locTitle.style.color = "var(--primary-dark)";
+                if(document.getElementById('currentCoords')) document.getElementById('currentCoords').innerText = data.location.address;
             }
+            
+            // --- NEW: WALLET ---
+            userWallet = data.walletBalance || 0;
+            if(document.getElementById('walletBalanceDisplay')) 
+                document.getElementById('walletBalanceDisplay').innerText = `Ksh ${userWallet}`;
+
+            // --- NEW: REFERRAL CODE GENERATION ---
+            if (data.referralCode) {
+                myReferralCode = data.referralCode;
+            } else {
+                // Generate code: First 3 letters of name + 3 random nums
+                const namePart = (auth.currentUser.displayName || "USER").substring(0,3).toUpperCase();
+                const randPart = Math.floor(100 + Math.random() * 900);
+                myReferralCode = `${namePart}${randPart}`;
+                await setDoc(userRef, { referralCode: myReferralCode }, { merge: true });
+            }
+            
+            if(document.getElementById('myRefCode')) 
+                document.getElementById('myRefCode').innerText = myReferralCode;
         }
     } catch(e) { console.error(e); }
 }
+
 
 window.toggleTheme = async () => {
     const toggle = document.getElementById('themeToggle');
@@ -664,3 +785,45 @@ window.generateReceiptPDF = (orderData) => {
 
 // Global Store to hold order data for downloading
 window.ordersDataMap = {};
+
+
+// --- REFERRAL FUNCTIONS ---
+window.shareReferral = () => {
+    if(!myReferralCode) return alert("Code loading...");
+    const msg = `Get fresh eggs at wholesale prices! Use my code ${myReferralCode} for a discount. Download: https://eggmaster.app`;
+    if (navigator.share) {
+        navigator.share({ title: 'EggMaster', text: msg, url: window.location.href });
+    } else {
+        prompt("Copy your referral link:", msg);
+    }
+};
+
+window.redeemReferral = async () => {
+    const code = document.getElementById('referralInput').value.trim().toUpperCase();
+    if (!code) return alert("Enter a code.");
+    if (code === myReferralCode) return alert("You cannot use your own code!");
+
+    try {
+        // Check if code exists (Search all users)
+        const q = query(collection(db, "users"), where("referralCode", "==", code));
+        const snapshot = await getDocs(q); // NOTE: Ensure getDocs is imported from firestore at top of file
+
+        if (snapshot.empty) return alert("Invalid Code.");
+
+        // Apply reward (Example: Add 50 bob to wallet)
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        await updateDoc(userRef, { 
+            walletBalance: userWallet + 50,
+            redeemedCode: code 
+        });
+        
+        userWallet += 50;
+        document.getElementById('walletBalanceDisplay').innerText = `Ksh ${userWallet}`;
+        alert(`✅ Code Redeemed! You got Ksh 50 in your wallet.`);
+        document.getElementById('referralInput').value = "";
+    } catch(e) {
+        console.error(e);
+        alert("Error redeeming code. (Make sure getDocs is imported)");
+    }
+};
+
