@@ -364,70 +364,56 @@ window.saveProfile = async () => {
 // ==========================================
 // 🔥 FIX: USER SETTINGS & REFERRAL GENERATOR
 // ==========================================
+
 async function loadUserSettings() {
     if (!auth.currentUser) return;
+    const refDisplay = document.getElementById('myRefCode');
+    
     try {
         const userRef = doc(db, "users", auth.currentUser.uid);
         let userDoc = await getDoc(userRef);
 
-        // Generate a referral code using name + random numbers
-        const namePart = (auth.currentUser.displayName || "USER").substring(0,3).toUpperCase().replace(/[^A-Z]/g, "X");
+        // Generate a fallback code just in case
+        const namePart = (auth.currentUser.displayName || "USER").substring(0,3).toUpperCase();
         const randPart = Math.floor(100 + Math.random() * 900);
-        const newCode = `${namePart}${randPart}`;
+        const fallbackCode = `${namePart}${randPart}`;
         
-        let data = {};
-
-        // 1. If User Doc exists, load data. If code missing, add it.
         if (userDoc.exists()) {
-            data = userDoc.data();
-            if (!data.referralCode) {
-                await setDoc(userRef, { referralCode: newCode }, { merge: true });
-                myReferralCode = newCode;
-            } else {
+            const data = userDoc.data();
+            if (data.referralCode) {
                 myReferralCode = data.referralCode;
+            } else {
+                // Document exists but code is missing, add it now
+                myReferralCode = fallbackCode;
+                await updateDoc(userRef, { referralCode: fallbackCode });
             }
-        } 
-        // 2. If User Doc DOES NOT exist (New Login), Create it immediately!
-        else {
-            const newUserObj = {
-                name: auth.currentUser.displayName || "New User",
+            
+            // Load other settings
+            userWallet = data.walletBalance || 0;
+            if(data.theme === 'dark') document.body.setAttribute('data-theme', 'dark');
+        } else {
+            // DOCUMENT DOES NOT EXIST - Create it now!
+            myReferralCode = fallbackCode;
+            await setDoc(userRef, {
+                name: auth.currentUser.displayName || "Customer",
                 email: auth.currentUser.email,
-                photo: auth.currentUser.photoURL,
-                referralCode: newCode,
+                referralCode: fallbackCode,
                 walletBalance: 0,
                 createdAt: new Date()
-            };
-            await setDoc(userRef, newUserObj);
-            myReferralCode = newCode;
-            data = newUserObj;
-            console.log("🆕 New User Profile Created via Script");
+            });
         }
 
-        // --- UPDATE UI ELEMENTS ---
-        
-        // Referral Code Display
-        if(document.getElementById('myRefCode')) 
-            document.getElementById('myRefCode').innerText = myReferralCode;
-
-        // Theme
-        if (data.theme === 'dark') {
-            document.body.setAttribute('data-theme', 'dark');
-            if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = true;
-        }
-
-        // Location
-        if (data.location) {
-            userLocation = data.location;
-            if(document.getElementById('currentCoords')) document.getElementById('currentCoords').innerText = data.location.address;
-        }
-        
-        // Wallet
-        userWallet = data.walletBalance || 0;
+        // Update the UI
+        if(refDisplay) refDisplay.innerText = myReferralCode;
         if(document.getElementById('walletBalanceDisplay')) 
             document.getElementById('walletBalanceDisplay').innerText = `Ksh ${userWallet}`;
 
-    } catch(e) { console.error("Error loading user settings:", e); }
+    } catch(e) { 
+        console.error("Error loading user settings:", e);
+        if(refDisplay) refDisplay.innerText = "Error Loading"; 
+    }
 }
+
 
 
 window.toggleTheme = async () => {
