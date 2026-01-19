@@ -1,6 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-// ADDED 'writeBatch' to imports below:
 import { getFirestore, collection, addDoc, query, where, doc, getDoc, getDocs, setDoc, onSnapshot, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
@@ -48,6 +47,7 @@ onAuthStateChanged(auth, async (user) => {
         document.body.classList.remove('not-logged-in');
         
         updateUIWithUser(user);
+        // Load settings immediately to generate referral code
         await loadUserSettings();
         fetchLivePrice(); 
         listenToOrders();
@@ -137,7 +137,7 @@ window.initiateOrder = () => {
 };
 
 // ==========================================
-// 🔥 REWRITTEN PAYMENT & ORDER SYSTEM (FIXED)
+// 🔥 PAYMENT & ORDER SYSTEM
 // ==========================================
 
 function generateOrderCode() {
@@ -148,8 +148,6 @@ function generateOrderCode() {
     }
     return result;
 }
-
-
 
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
@@ -187,9 +185,7 @@ window.verifyPayment = async () => {
                 // 2. FORCE M-Pesa Amount to a Number
                 const paidAmount = Number(data.amount);
 
-                // 3. THE STRICT CHECK (Must be EXACTLY equal)
-
-                                // --- NEW WALLET LOGIC ---
+                // --- WALLET LOGIC ---
                 let finalPaid = paidAmount;
                 let walletDeduction = 0;
                 let balanceToAdd = 0;
@@ -215,15 +211,13 @@ window.verifyPayment = async () => {
                 }
 
                 // Proceed only if the math works out
-                // (Note: We use >= because overpayment is now allowed)
                 if (finalPaid >= expectedTotal) {
                     try {
                         const batch = writeBatch(db);
                         const newOrderRef = doc(collection(db, "orders"));
                         const deliveryCode = generateOrderCode();
                         
-                        // ... (Existing Order Data logic here) ...
-                         const safeLocation = {
+                        const safeLocation = {
                             lat: (userLocation && userLocation.lat) ? userLocation.lat : null,
                             lng: (userLocation && userLocation.lng) ? userLocation.lng : null
                         };
@@ -290,63 +284,9 @@ window.verifyPayment = async () => {
                         resetBtn();
                     }
                 }
-
-
-                // 4. PROCEED ONLY IF EXACT MATCH
-                try {
-                    const batch = writeBatch(db);
-                    const newOrderRef = doc(collection(db, "orders"));
-                    const deliveryCode = generateOrderCode();
-                    
-                    const safeLocation = {
-                        lat: (userLocation && userLocation.lat) ? userLocation.lat : null,
-                        lng: (userLocation && userLocation.lng) ? userLocation.lng : null
-                    };
-
-                    batch.set(newOrderRef, {
-                        userId: auth.currentUser.uid,
-                        userName: auth.currentUser.displayName || "Customer",
-                        item: "Tray of 30", 
-                        unitPrice: currentEggPrice, 
-                        quantity: quantity, 
-                        totalPrice: expectedTotal,
-                        status: 'Pending',
-                        mpesaNumber: data.phone || "Verified", 
-                        mpesaCode: codeInput,
-                        address: userLocation.address,
-                        locationCoords: safeLocation,
-                        deliveryCode: deliveryCode, 
-                        createdAt: new Date()
-                    });
-
-                    batch.update(mpesaRef, { 
-                        used: true, 
-                        usedBy: auth.currentUser.uid,
-                        claimedAt: new Date()
-                    });
-
-                    const stockRef = doc(db, "config", "pricing");
-                    batch.update(stockRef, { currentStock: currentStock - quantity });
-
-                    await batch.commit();
-
-                    document.getElementById('mpesa-modal').style.display = 'none';
-                    resetBtn();
-                    await createNotification(`Order Success! Code: ${deliveryCode}`);
-                    alert(`✅ Payment Verified!\n\nDELIVERY CODE: ${deliveryCode}`);
-                    
-                    window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
-                    generateWhatsAppLink(quantity, expectedTotal, userLocation.address, deliveryCode);
-
-                } catch (batchError) {
-                    console.error(batchError);
-                    alert("Order failed. Check console for details.");
-                    resetBtn();
-                }
-
             } else if (attempts >= maxAttempts) {
                 clearInterval(pollLoop);
-                alert("❌ Code not found in system yet.");
+                alert("❌ Code not found in system yet. If you just paid, please wait 30s and try again.");
                 resetBtn();
             }
         } catch (err) {
@@ -421,46 +361,72 @@ window.saveProfile = async () => {
     finally { saveBtn.innerText = "Save Changes"; saveBtn.disabled = false; }
 };
 
-
+// ==========================================
+// 🔥 FIX: USER SETTINGS & REFERRAL GENERATOR
+// ==========================================
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
         const userRef = doc(db, "users", auth.currentUser.uid);
-        const userDoc = await getDoc(userRef);
-        
-        if (userDoc.exists()) {
-            const data = userDoc.data();
-            
-            // Theme & Location (Existing)
-            if (data.theme === 'dark') {
-                document.body.setAttribute('data-theme', 'dark');
-                if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = true;
-            }
-            if (data.location) {
-                userLocation = data.location;
-                if(document.getElementById('currentCoords')) document.getElementById('currentCoords').innerText = data.location.address;
-            }
-            
-            // --- NEW: WALLET ---
-            userWallet = data.walletBalance || 0;
-            if(document.getElementById('walletBalanceDisplay')) 
-                document.getElementById('walletBalanceDisplay').innerText = `Ksh ${userWallet}`;
+        let userDoc = await getDoc(userRef);
 
-            // --- NEW: REFERRAL CODE GENERATION ---
-            if (data.referralCode) {
-                myReferralCode = data.referralCode;
+        // Generate a referral code using name + random numbers
+        const namePart = (auth.currentUser.displayName || "USER").substring(0,3).toUpperCase().replace(/[^A-Z]/g, "X");
+        const randPart = Math.floor(100 + Math.random() * 900);
+        const newCode = `${namePart}${randPart}`;
+        
+        let data = {};
+
+        // 1. If User Doc exists, load data. If code missing, add it.
+        if (userDoc.exists()) {
+            data = userDoc.data();
+            if (!data.referralCode) {
+                await setDoc(userRef, { referralCode: newCode }, { merge: true });
+                myReferralCode = newCode;
             } else {
-                // Generate code: First 3 letters of name + 3 random nums
-                const namePart = (auth.currentUser.displayName || "USER").substring(0,3).toUpperCase();
-                const randPart = Math.floor(100 + Math.random() * 900);
-                myReferralCode = `${namePart}${randPart}`;
-                await setDoc(userRef, { referralCode: myReferralCode }, { merge: true });
+                myReferralCode = data.referralCode;
             }
-            
-            if(document.getElementById('myRefCode')) 
-                document.getElementById('myRefCode').innerText = myReferralCode;
+        } 
+        // 2. If User Doc DOES NOT exist (New Login), Create it immediately!
+        else {
+            const newUserObj = {
+                name: auth.currentUser.displayName || "New User",
+                email: auth.currentUser.email,
+                photo: auth.currentUser.photoURL,
+                referralCode: newCode,
+                walletBalance: 0,
+                createdAt: new Date()
+            };
+            await setDoc(userRef, newUserObj);
+            myReferralCode = newCode;
+            data = newUserObj;
+            console.log("🆕 New User Profile Created via Script");
         }
-    } catch(e) { console.error(e); }
+
+        // --- UPDATE UI ELEMENTS ---
+        
+        // Referral Code Display
+        if(document.getElementById('myRefCode')) 
+            document.getElementById('myRefCode').innerText = myReferralCode;
+
+        // Theme
+        if (data.theme === 'dark') {
+            document.body.setAttribute('data-theme', 'dark');
+            if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = true;
+        }
+
+        // Location
+        if (data.location) {
+            userLocation = data.location;
+            if(document.getElementById('currentCoords')) document.getElementById('currentCoords').innerText = data.location.address;
+        }
+        
+        // Wallet
+        userWallet = data.walletBalance || 0;
+        if(document.getElementById('walletBalanceDisplay')) 
+            document.getElementById('walletBalanceDisplay').innerText = `Ksh ${userWallet}`;
+
+    } catch(e) { console.error("Error loading user settings:", e); }
 }
 
 
@@ -481,7 +447,7 @@ window.changeLanguage = async (lang) => {
 };
 
 // ==========================================
-// 📍 FIXED LOCATION LOGIC (GPS + MANUAL)
+// 📍 LOCATION LOGIC (GPS + MANUAL)
 // ==========================================
 
 window.initLocationFlow = function() {
@@ -683,22 +649,18 @@ window.simulateTestPayment = async () => {
 
 
 // ==========================================
-// 📄 PROFESSIONAL PDF RECEIPT GENERATOR
+// 📄 RECEIPT GENERATOR
 // ==========================================
 window.generateReceiptPDF = (orderData) => {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    // -- COLORS --
-    const primaryColor = [255, 179, 0]; // Your Brand Yellow
-    const darkColor = [26, 29, 31];     // Dark Grey
+    const primaryColor = [255, 179, 0]; 
+    const darkColor = [26, 29, 31];
 
-    // -- HEADER --
-    // Gold Bar at top
     doc.setFillColor(...primaryColor);
     doc.rect(0, 0, 210, 40, 'F');
 
-    // Title
     doc.setFontSize(22);
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
@@ -708,14 +670,12 @@ window.generateReceiptPDF = (orderData) => {
     doc.setFont("helvetica", "normal");
     doc.text("Official Payment Receipt", 105, 30, { align: "center" });
 
-    // -- ORDER INFO SECTION --
     doc.setTextColor(...darkColor);
     doc.setFontSize(10);
     
     const startY = 55;
     const dateStr = orderData.createdAt.toDate ? orderData.createdAt.toDate().toLocaleString() : new Date(orderData.createdAt).toLocaleString();
 
-    // Left Side: Customer Info
     doc.setFont("helvetica", "bold");
     doc.text("BILLED TO:", 14, startY);
     doc.setFont("helvetica", "normal");
@@ -723,7 +683,6 @@ window.generateReceiptPDF = (orderData) => {
     doc.text(orderData.address || "Mombasa, Kenya", 14, startY + 12);
     doc.text(`Tel: ${orderData.mpesaNumber || "N/A"}`, 14, startY + 18);
 
-    // Right Side: Order Details
     doc.setFont("helvetica", "bold");
     doc.text("RECEIPT DETAILS:", 140, startY);
     doc.setFont("helvetica", "normal");
@@ -731,7 +690,6 @@ window.generateReceiptPDF = (orderData) => {
     doc.text(`Date: ${dateStr}`, 140, startY + 12);
     doc.text(`Status: ${orderData.status}`, 140, startY + 18);
 
-    // -- TABLE OF ITEMS --
     doc.autoTable({
         startY: startY + 30,
         head: [['Description', 'Quantity', 'Unit Price', 'Total']],
@@ -748,7 +706,6 @@ window.generateReceiptPDF = (orderData) => {
         styles: { fontSize: 11, cellPadding: 5 },
     });
 
-    // -- TOTALS SECTION --
     const finalY = doc.lastAutoTable.finalY + 10;
     
     doc.setFontSize(12);
@@ -761,35 +718,30 @@ window.generateReceiptPDF = (orderData) => {
     doc.setTextColor(46, 125, 50); // Green Color
     doc.text(`Ksh ${orderData.totalPrice.toLocaleString()}`, 170, finalY + 10);
 
-    // -- FOOTER --
     doc.setTextColor(...darkColor);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     
-    // M-Pesa Code Box
     doc.setDrawColor(200, 200, 200);
     doc.roundedRect(14, finalY + 25, 180, 20, 3, 3, 'S');
     doc.text(`Payment Method: M-Pesa`, 20, finalY + 33);
     doc.setFont("helvetica", "bold");
     doc.text(`Transaction Code: ${orderData.mpesaCode || "N/A"}`, 20, finalY + 40);
 
-    // Bottom Note
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
     doc.text("Thank you for your business!", 105, 280, { align: "center" });
     doc.text("For support call: 0700 000 000", 105, 285, { align: "center" });
 
-    // Save File
     doc.save(`Receipt_EggMaster_${orderData.deliveryCode || "Order"}.pdf`);
 };
 
-// Global Store to hold order data for downloading
 window.ordersDataMap = {};
 
 
 // --- REFERRAL FUNCTIONS ---
 window.shareReferral = () => {
-    if(!myReferralCode) return alert("Code loading...");
+    if(!myReferralCode) return alert("Code loading... If new, please refresh page.");
     const msg = `Get fresh eggs at wholesale prices! Use my code ${myReferralCode} for a discount. Download: https://eggmaster.app`;
     if (navigator.share) {
         navigator.share({ title: 'EggMaster', text: msg, url: window.location.href });
@@ -804,14 +756,15 @@ window.redeemReferral = async () => {
     if (code === myReferralCode) return alert("You cannot use your own code!");
 
     try {
-        // Check if code exists (Search all users)
+        // Query database for code
         const q = query(collection(db, "users"), where("referralCode", "==", code));
-        const snapshot = await getDocs(q); // NOTE: Ensure getDocs is imported from firestore at top of file
+        const snapshot = await getDocs(q);
 
-        if (snapshot.empty) return alert("Invalid Code.");
+        if (snapshot.empty) return alert("Invalid Code. Code not found.");
 
-        // Apply reward (Example: Add 50 bob to wallet)
+        // Apply reward (Add 50 bob to wallet)
         const userRef = doc(db, "users", auth.currentUser.uid);
+        
         await updateDoc(userRef, { 
             walletBalance: userWallet + 50,
             redeemedCode: code 
@@ -823,7 +776,11 @@ window.redeemReferral = async () => {
         document.getElementById('referralInput').value = "";
     } catch(e) {
         console.error(e);
-        alert("Error redeeming code. (Make sure getDocs is imported)");
+        // Common error is missing index
+        if(e.message.includes("requires an index")) {
+            alert("Admin: Please create the index in Firebase Console.");
+        } else {
+            alert("Error redeeming code.");
+        }
     }
 };
-
