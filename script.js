@@ -738,35 +738,57 @@ window.shareReferral = () => {
 
 window.redeemReferral = async () => {
     const code = document.getElementById('referralInput').value.trim().toUpperCase();
-    if (!code) return alert("Enter a code.");
+    if (!code) return alert("Please enter a code.");
     if (code === myReferralCode) return alert("You cannot use your own code!");
 
+    const btn = document.querySelector('#referralInput + button');
+    const originalText = btn.innerText;
+    btn.innerText = "Checking...";
+    btn.disabled = true;
+
     try {
-        // Query database for code
+        // 1. Check if CURRENT user has already redeemed a code
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists() && userSnap.data().redeemedCode) {
+            throw new Error("You have already redeemed a referral code.");
+        }
+
+        // 2. Search for the code owner
+        // NOTE: This requires Firestore Rules to allow listing users!
         const q = query(collection(db, "users"), where("referralCode", "==", code));
         const snapshot = await getDocs(q);
 
-        if (snapshot.empty) return alert("Invalid Code. Code not found.");
+        if (snapshot.empty) {
+            throw new Error("Invalid Code. This code does not exist.");
+        }
 
-        // Apply reward (Add 50 bob to wallet)
-        const userRef = doc(db, "users", auth.currentUser.uid);
-        
+        // 3. Apply Reward (50 bob)
+        const currentBalance = userSnap.data().walletBalance || 0;
+        const newBalance = currentBalance + 50;
+
         await updateDoc(userRef, { 
-            walletBalance: userWallet + 50,
+            walletBalance: newBalance,
             redeemedCode: code 
         });
         
-        userWallet += 50;
+        // Update UI immediately
+        userWallet = newBalance;
         document.getElementById('walletBalanceDisplay').innerText = `Ksh ${userWallet}`;
-        alert(`✅ Code Redeemed! You got Ksh 50 in your wallet.`);
+        
+        alert(`✅ Success! Ksh 50 added to your wallet.`);
         document.getElementById('referralInput').value = "";
+
     } catch(e) {
         console.error(e);
-        // Common error is missing index
-        if(e.message.includes("requires an index")) {
-            alert("Admin: Please create the index in Firebase Console.");
+        if(e.message.includes("Missing or insufficient permissions")) {
+            alert("System Error: Firestore Rules prevent checking this code. Please contact Admin.");
         } else {
-            alert("Error redeeming code.");
+            alert(e.message);
         }
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 };
