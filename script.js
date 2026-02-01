@@ -363,29 +363,63 @@ window.changeLanguage = async (lang) => {
 // 📍 FIXED LOCATION LOGIC (GPS + MANUAL)
 // ==========================================
 
+// ==========================================
+// 📍 FIXED LOCATION LOGIC (GPS RESTRICTED TO MOMBASA)
+// ==========================================
+
+const MOMBASA_CENTER = { lat: -4.0435, lng: 39.6682 }; // Center of Mombasa
+const MAX_DELIVERY_RADIUS_KM = 35; // Allow GPS within 35km of center
+
 window.initLocationFlow = function() {
     const choice = confirm("Use GPS for exact delivery location?\n\n[OK] = Use GPS (Best for Drivers)\n[Cancel] = Select Area List");
+    
     if (choice) {
         if (!navigator.geolocation) {
             alert("GPS not supported on this device. Opening list...");
             return window.openLocationSearch();
         }
         
+        // Show loading state
+        const locTitle = document.getElementById('locationStatus');
+        if(locTitle) locTitle.innerText = "Locating...";
+
         navigator.geolocation.getCurrentPosition(
             async (pos) => {
+                const userLat = pos.coords.latitude;
+                const userLng = pos.coords.longitude;
+
+                // --- CHECK DISTANCE FROM MOMBASA ---
+                const distance = getDistanceFromLatLonInKm(
+                    userLat, userLng, 
+                    MOMBASA_CENTER.lat, MOMBASA_CENTER.lng
+                );
+
+                console.log(`User is ${distance.toFixed(2)}km from Mombasa Center`);
+
+                if (distance > MAX_DELIVERY_RADIUS_KM) {
+                    alert(`⚠️ LOCATION ERROR\n\nYou are detected ${distance.toFixed(0)}km away from Mombasa.\n\nWe currently only deliver within Mombasa County.\n\nPlease select a location manually from the list if you are ordering for someone else.`);
+                    
+                    if(locTitle) locTitle.innerText = "Delivery Address"; // Reset title
+                    window.openLocationSearch(); // Fallback to manual list
+                    return; 
+                }
+
+                // If inside Mombasa, proceed to save
                 userLocation = { 
-                    lat: pos.coords.latitude, 
-                    lng: pos.coords.longitude, 
+                    lat: userLat, 
+                    lng: userLng, 
                     address: "GPS Location (Exact Pin)", 
                     timestamp: new Date() 
                 };
                 
                 await saveLoc();
-                alert("✅ GPS Location Saved!\nThe driver will see your exact map pin.");
+                alert("✅ GPS Location Saved!\nThe driver will see your exact map pin in Mombasa.");
             }, 
             (err) => { 
                 console.error("GPS Error:", err);
                 alert("⚠️ GPS Failed or Denied.\nPlease select your area manually."); 
+                const locTitle = document.getElementById('locationStatus');
+                if(locTitle) locTitle.innerText = "Delivery Address";
                 window.openLocationSearch(); 
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -664,3 +698,20 @@ window.generateReceiptPDF = (orderData) => {
 
 // Global Store to hold order data for downloading
 window.ordersDataMap = {};
+
+// --- HELPER: CALCULATE DISTANCE (Haversine Formula) ---
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+}
+
+function deg2rad(deg) {
+    return deg * (Math.PI / 180);
+}
