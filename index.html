@@ -246,5 +246,87 @@
         <div class="nav-item" onclick="window.showPage('settings', this)"><i class="fa-solid fa-sliders"></i></div>
     </nav>
 
+
+        <section id="payment-page" class="page">
+        <div class="container" style="max-width: 480px; margin: 0 auto; padding-top: 20px;">
+            
+            <div style="display:flex; align-items:center; margin-bottom:20px;">
+                <button onclick="window.showPage('cart')" style="background:none; border:none; font-size:1.2rem; cursor:pointer; color:#333; margin-right:15px;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h1 class="page-title" style="margin:0; font-size:1.5rem; font-weight:800;">Confirm Payments</h1>
+            </div>
+
+            <div class="card payment-card">
+                <h2 class="card-header">Order Summary</h2>
+                <div class="info-list">
+                    <div class="list-item">
+                        <i class="fas fa-check check-icon"></i>
+                        <span>Total Trays: <span class="bold-text" id="pay-qty">0</span></span>
+                    </div>
+                    <div class="list-item">
+                        <i class="fas fa-check check-icon"></i>
+                        <span>Total Amount: <span class="bold-text" style="color:#dc2626;" id="pay-total">Ksh 0</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card payment-card">
+                <h2 class="card-header">How To Pay</h2>
+                <div class="info-list">
+                    <div class="list-item">
+                        <i class="fas fa-check check-icon"></i>
+                        <span>Open M-PESA > Withdraw Cash > From Agent</span>
+                    </div>
+                    
+                    <div class="list-item till-row">
+                        <div class="till-content">
+                            <i class="fas fa-check check-icon"></i>
+                            <span>Agent No: <span class="bold-text" id="agentNo">7172200</span></span>
+                        </div>
+                        <button class="copy-btn" onclick="copyText('agentNo', 'Agent Number')">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="list-item till-row">
+                        <div class="till-content">
+                            <i class="fas fa-check check-icon"></i>
+                            <span>Store No: <span class="bold-text" id="storeNo">386997</span></span>
+                        </div>
+                        <button class="copy-btn" onclick="copyText('storeNo', 'Store Number')">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="list-item">
+                        <i class="fas fa-check check-icon"></i>
+                        <span>Enter Amount: <span class="bold-text" id="pay-instruction-total">Ksh 0</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="confirm-btn" onclick="openPaymentModal()">I Have Paid</button>
+
+            <div id="toast" class="toast">Number copied!</div>
+        </div>
+    </section>
+
+    <div id="paymentModalOverlay" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <div style="font-size: 2rem; color: #1d4ed8; margin-bottom: 10px;">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <h2 style="margin-bottom:10px; color:#333;">Validate Payment</h2>
+            <p style="font-size:0.9rem; color:#666; margin-bottom:20px;">
+                Please enter the M-PESA Transaction Code (e.g., SBM8...) received in your SMS.
+            </p>
+            <input type="text" class="mpesa-input" placeholder="Enter Transaction Code" id="mpesaCodeInput">
+            <button class="verify-btn" onclick="window.submitFinalOrder()">Verify Payment</button>
+            <button class="cancel-btn" onclick="closePaymentModal()">Cancel</button>
+        </div>
+    </div>
+
+    
 </body>
 </html>
