@@ -385,3 +385,89 @@ input:checked + .slider:before { transform: translateX(20px); }
 .whatsapp-float:active {
     transform: scale(0.9);
 }
+
+
+/* =========================================
+   NEW PAYMENT PAGE STYLES
+   ========================================= */
+:root {
+    --primary-orange: #f97316;
+    --primary-red: #ef4444;
+    --primary-blue: #1d4ed8;
+}
+
+/* Payment Card Styling */
+.payment-card {
+    background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+    border-radius: 12px;
+    padding: 25px 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    text-align: center;
+    border: 1px solid #e5e7eb;
+}
+
+.card-header {
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin-bottom: 25px;
+    background: linear-gradient(to right, #ea580c, #dc2626);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+}
+
+/* List Items */
+.info-list { display: flex; flex-direction: column; gap: 18px; text-align: left; }
+.list-item { display: flex; align-items: flex-start; gap: 12px; color: #1f2937; font-size: 0.95rem; }
+.check-icon { color: var(--primary-orange); font-size: 1.1rem; margin-top: 2px; }
+.bold-text { font-weight: 700; color: #111827; }
+
+/* Till Row Copy Buttons */
+.till-row {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    background-color: rgba(255,255,255,0.7);
+    padding: 10px; border-radius: 8px; border: 1px dashed #cbd5e1;
+}
+.till-content { display: flex; align-items: center; gap: 12px; }
+.copy-btn {
+    background: linear-gradient(135deg, #fb923c, #ef4444);
+    border: none; width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: white; cursor: pointer;
+    box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4);
+}
+.copy-btn:active { transform: scale(0.95); }
+
+/* Buttons */
+.confirm-btn {
+    width: 100%; background-color: var(--primary-blue); color: white;
+    padding: 16px; border: none; border-radius: 8px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+    margin-bottom: 25px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+}
+.verify-btn {
+    width: 100%; background: linear-gradient(90deg, #1d4ed8, #2563eb);
+    color: white; padding: 14px; border: none; border-radius: 8px;
+    font-weight: 700; cursor: pointer; margin-top: 10px;
+}
+.cancel-btn {
+    background: none; border: none; color: #6b7280; margin-top: 15px;
+    cursor: pointer; text-decoration: underline; font-size: 0.9rem;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+    position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center; display: flex;
+}
+.modal-content {
+    background: white; width: 90%; max-width: 400px;
+    border-radius: 16px; padding: 25px; text-align: center;
+}
+.mpesa-input {
+    width: 100%; padding: 12px; border: 2px solid #e5e7eb;
+    border-radius: 8px; font-size: 1.1rem; margin-bottom: 20px;
+    text-align: center; text-transform: uppercase; font-weight: 600;
+}
