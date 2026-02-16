@@ -7,90 +7,19 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-
     <style>
         #stealth-admin-trigger {
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
             width: 20px; height: 20px; background: rgba(255, 255, 255, 0.05);
             border-radius: 50%; z-index: 10000; cursor: pointer;
         }
-
-        /* --- NEW PAYMENT MODAL STYLES --- */
-        .pay-card-container {
-            width: 100%; max-width: 360px;
-            display: flex; flex-direction: column; gap: 15px;
-        }
-
-        /* Top "Due Today" Banner */
-        .due-banner {
-            background: white; padding: 15px; border-radius: 12px;
-            text-align: center; font-weight: 600; color: #333;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-        }
-        .check-orange { color: #FF9800; font-size: 18px; }
-
-        /* Main White Card */
-        .pay-white-card {
-            background: white; border-radius: 16px; padding: 25px 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            text-align: center; position: relative;
-        }
-
-        .pay-title {
-            color: #D32F2F; /* Reddish Title */
-            font-size: 22px; font-weight: 700; margin: 0 0 20px 0;
-            text-shadow: 0 1px 1px rgba(0,0,0,0.1);
-        }
-
-        /* List Items */
-        .pay-step {
-            display: flex; align-items: center; margin-bottom: 15px;
-            text-align: left; font-size: 14px; color: #444;
-        }
-        .pay-step i {
-            color: #FF9800; margin-right: 12px; font-size: 14px;
-        }
-        .pay-step b { color: #000; font-weight: 700; }
-        
-        .copy-box {
-            margin-left: auto; background: #FF5722; color: white;
-            width: 24px; height: 24px; border-radius: 4px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; cursor: pointer;
-        }
-
-        /* Blue Button */
-        .btn-confirm-blue {
-            background: #1565C0; color: white; width: 100%;
-            padding: 14px; border: none; border-radius: 8px;
-            font-size: 15px; font-weight: 600; cursor: pointer;
-            margin-top: 10px;
-            box-shadow: 0 4px 10px rgba(21, 101, 192, 0.3);
-        }
-        .btn-confirm-blue:active { transform: scale(0.98); }
-
-        .pay-note {
-            background: #FFF8E1; color: #5D4037; font-size: 11px;
-            padding: 12px; border-radius: 8px; margin-top: 15px; text-align: left; line-height: 1.4;
-        }
-
-        /* Validation Screen */
-        .validate-area textarea {
-            width: 100%; height: 100px; border: 1px solid #ccc;
-            border-radius: 8px; padding: 10px; font-family: inherit;
-            margin: 15px 0; background: #FAFAFA; resize: none;
-        }
-        .validate-area textarea:focus { border-color: #1565C0; outline: none; }
-        
-        /* Blur effect for modal background */
-        .modal-overlay { backdrop-filter: blur(8px); background: rgba(0,0,0,0.7); }
     </style>
-
     <script type="module" src="script.js" defer></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+    
 </head>
 <body class="not-logged-in">
 
@@ -117,117 +46,32 @@
 
     <div id="mpesa-modal" class="modal-overlay">
         
-        <div class="pay-card-container">
+        <div class="modal-content">
+            <div style="text-align:center; margin-bottom:15px;">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" style="height:40px;" alt="M-Pesa">
+            </div>
+            <h3>Payment Required</h3>
             
-            <div id="pay-step-1">
-                <div class="due-banner">
-                    <i class="fa-solid fa-check check-orange"></i>
-                    Due Today: &nbsp; <b>Ksh <span id="mpesaTotalDisplay">0</span></b>
-                </div>
-
-                <div class="pay-white-card" style="margin-top: 15px;">
-                    <h2 class="pay-title">How To Pay</h2>
-                    
-                    <div class="pay-step">
-                        <i class="fa-solid fa-check"></i> <span>Go to M-PESA</span>
-                    </div>
-                    <div class="pay-step">
-                        <i class="fa-solid fa-check"></i> <span>Select: <b>Lipa na M-PESA</b></span>
-                    </div>
-                    <div class="pay-step">
-                        <i class="fa-solid fa-check"></i> <span>Select: <b>Buy Goods and Services</b></span>
-                    </div>
-                    <div class="pay-step">
-                        <i class="fa-solid fa-check"></i> 
-                        <span style="flex:1;">Enter till no: <b>123456</b></span>
-                        <div class="copy-box" onclick="alert('Till Copied!')"><i class="fa-regular fa-copy"></i></div>
-                    </div>
-                    <div class="pay-step">
-                        <i class="fa-solid fa-check"></i> <span>Enter amount: <b>Ksh <span id="mpesaTotalDisplay2">0</span></b></span>
-                    </div>
-
-                    <button class="btn-confirm-blue" onclick="goToValidation()">Confirm Payments</button>
-
-                    <div class="pay-note">
-                        <b>NOTE:</b> Payment system is selected based on user location for convenience purpose.
-                    </div>
-                    <div style="margin-top:10px; cursor:pointer; color:#999; font-size:12px;" onclick="closeMpesa()">Cancel</div>
-                </div>
+            <div style="background:#f9f9f9; padding:15px; border-radius:10px; font-size:13px; margin-bottom:15px; border:1px dashed #ccc;">
+                <p style="margin:0 0 5px;"><strong>1. Go to M-Pesa > Lipa na M-Pesa</strong></p>
+                <p style="margin:0 0 5px;"><strong>2. Buy Goods / Paybill</strong></p>
+                <p style="margin:0 0 5px;">Till: <strong>123456</strong> (Agent Name)</p>
+                <p style="margin:0;">Amount: <strong>Ksh <span id="mpesaTotalDisplay">0</span></strong></p>
+            </div>
+            
+            <div class="input-group">
+                <label>Enter M-Pesa Transaction Code</label>
+                <input type="text" id="mpesaCodeInput" placeholder="e.g. QGH5..." style="text-transform:uppercase; letter-spacing: 2px; font-weight:bold; text-align:center;">
+                <small style="color:#666; font-size:10px; display:block; margin-top:5px;">Wait for the SMS, then copy the code here.</small>
             </div>
 
-            <div id="pay-step-2" style="display: none;">
-                <div class="pay-white-card">
-                    <h3 style="margin-top:0;">Validate Payments</h3>
-                    
-                    <p style="font-size:13px; color:#666; text-align:left; line-height:1.5;">
-                        Copy the entire confirmation message you received from M-PESA after making payments and paste in the text field below then click verify button.
-                    </p>
-
-                    <div class="validate-area">
-                        <textarea id="fullMsgInput" placeholder="Paste M-PESA message here"></textarea>
-                    </div>
-
-                    <input type="hidden" id="mpesaCodeInput">
-
-                    <button id="payBtn" class="btn-confirm-blue" onclick="processAndVerify()">Verify</button>
-                    
-                    <div style="margin-top:15px; cursor:pointer; color:#999; font-size:13px;" onclick="backToStep1()">Back</div>
-                </div>
-            </div>
-
+            <button id="payBtn" class="save-btn" style="width:100%; background:#4CAF50; color:white;" onclick="window.verifyPayment()">
+                Verify Payment
+            </button>
+            <button class="cancel-btn" style="width:100%; margin-top:10px;" onclick="document.getElementById('mpesa-modal').style.display='none'">Cancel</button>
         </div>
     </div>
 
-    <script>
-        function closeMpesa() {
-            document.getElementById('mpesa-modal').style.display = 'none';
-            // Reset steps
-            document.getElementById('pay-step-1').style.display = 'block';
-            document.getElementById('pay-step-2').style.display = 'none';
-        }
-
-        function goToValidation() {
-            document.getElementById('pay-step-1').style.display = 'none';
-            document.getElementById('pay-step-2').style.display = 'block';
-        }
-
-        function backToStep1() {
-            document.getElementById('pay-step-2').style.display = 'none';
-            document.getElementById('pay-step-1').style.display = 'block';
-        }
-
-        // Mirrors the total to the second display span
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                const val = document.getElementById('mpesaTotalDisplay').innerText;
-                document.getElementById('mpesaTotalDisplay2').innerText = val;
-            });
-        });
-        const target = document.getElementById('mpesaTotalDisplay');
-        if(target) observer.observe(target, { childList: true, characterData: true, subtree: true });
-
-        // LOGIC: Extract Code from full message and call script.js function
-        window.processAndVerify = function() {
-            const fullMsg = document.getElementById('fullMsgInput').value;
-            const hiddenInput = document.getElementById('mpesaCodeInput');
-            
-            // Regex to find 10-digit code (e.g., QGH5...)
-            const codeMatch = fullMsg.match(/([A-Z0-9]{10})/);
-
-            if (codeMatch) {
-                hiddenInput.value = codeMatch[1]; // Put the code where script.js expects it
-                window.verifyPayment(); // Call the original function from script.js
-            } else {
-                // If user just typed the code manually, accept that too
-                if(fullMsg.length === 10) {
-                    hiddenInput.value = fullMsg;
-                    window.verifyPayment();
-                } else {
-                    alert("❌ Could not find a valid M-Pesa code in the text.\nPlease paste the FULL message.");
-                }
-            }
-        }
-    </script>
     <div id="profile-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Edit Profile</h3>
@@ -404,4 +248,3 @@
 
 </body>
 </html>
-
