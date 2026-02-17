@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-// ADDED 'writeBatch' to imports below:
-import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -22,13 +21,11 @@ const provider = new GoogleAuthProvider();
 
 let userLocation = null;
 let currentEggPrice = 385; 
-let currentStock = 0; 
 
 // Mombasa Areas
 const MOMBASA_AREAS = [
     "Nyali", "Bamburi", "Tudor", "Kizingo", "Mtwapa", "Likoni", 
-    "Changamwe", "Mikindani", "Ganjoni", "Mombasa Island", "Shanzu", "Mkomani",
-    "Bombolulu", "Kisauni", "Kongowea", "Mbaraki", "Mama Ngina"
+    "Changamwe", "Mikindani", "Ganjoni", "Mombasa Island", "Shanzu", "Mkomani"
 ];
 
 const translations = {
@@ -73,30 +70,13 @@ async function fetchLivePrice() {
     try {
         onSnapshot(doc(db, "config", "pricing"), (doc) => {
             if (doc.exists()) {
-                const data = doc.data();
-                currentEggPrice = data.currentPrice || 385;
-                currentStock = data.currentStock || 0; 
+                currentEggPrice = doc.data().currentPrice || 385;
             }
-            
-            // Update Price Display
             const priceDisplay = document.getElementById('dynamicPriceDisplay');
             if(priceDisplay) priceDisplay.innerText = currentEggPrice;
-
-            // Update Stock Display
-            const stockDisplay = document.getElementById('stockDisplay');
-            if(stockDisplay) {
-                if(currentStock > 0) {
-                    stockDisplay.innerHTML = `<i class="fa-solid fa-boxes-stacked"></i> ${currentStock} Trays Available`;
-                    stockDisplay.style.color = "#2E7D32"; // Green
-                } else {
-                    stockDisplay.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Out of Stock`;
-                    stockDisplay.style.color = "#F44336"; // Red
-                }
-            }
         });
-    } catch(e) { console.error("Error fetching price/stock", e); }
+    } catch(e) { console.error("Error fetching price", e); }
 }
-
 
 // --- ORDER LOGIC ---
 window.updateQty = (change) => {
@@ -109,23 +89,11 @@ window.updateQty = (change) => {
 
 window.initiateOrder = () => {
     if (!auth.currentUser) return alert("Please login first.");
-    
-    // STRICT LOCATION CHECK
-    if (!userLocation || !userLocation.address) {
-        if(confirm("⚠️ Delivery Location Missing!\n\nPlease set your location to continue.")) {
-            window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
-            setTimeout(() => window.initLocationFlow(), 500);
-        }
+    if (!userLocation) {
+        if(confirm("No delivery address! Set one now?")) window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
         return;
     }
-    
     const quantity = parseInt(document.getElementById('shopQty').innerText);
-
-    // CHECK STOCK BEFORE ORDERING
-    if (quantity > currentStock) {
-        return alert(`⚠️ Not enough stock!\n\nAvailable: ${currentStock} Trays\nYou want: ${quantity} Trays\n\nPlease reduce quantity.`);
-    }
-
     const total = quantity * currentEggPrice;
     document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
     document.getElementById('mpesaCodeInput').value = "";
@@ -133,8 +101,87 @@ window.initiateOrder = () => {
 };
 
 // ==========================================
-// 🔥 REWRITTEN PAYMENT & ORDER SYSTEM (FIXED)
+// 🔥 ROBUST VERIFICATION LOGIC (With Strict Amount Check)
 // ==========================================
+window.verifyPayment = async () => {
+    const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
+    const btn = document.getElementById('payBtn');
+    
+    // 1. Basic Validation
+    if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
+
+    const quantity = parseInt(document.getElementById('shopQty').innerText);
+    const expectedTotal = quantity * currentEggPrice;
+
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking Database (30s)...`;
+
+    let attempts = 0;
+    const maxAttempts = 10; // Check for ~30 seconds (10 * 3s)
+
+    const pollLoop = setInterval(async () => {
+        attempts++;
+        console.log(`🔎 Check #${attempts} for code: ${codeInput}`);
+
+        try {
+            // 2. CHECK DATABASE for the code
+            const docRef = doc(db, "mpesa_payments", codeInput);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+
+                // 3. STOP POLLING - FOUND THE CODE
+                clearInterval(pollLoop);
+                
+                // 4. CHECK IF ALREADY USED
+                if (data.used) {
+                    alert("❌ SCAM ALERT: This M-Pesa code has already been used!");
+                    resetBtn();
+                    return;
+                }
+
+                // 5. 🔥 STRICT AMOUNT CHECK 🔥
+                // Prevents scams where user pays 1 Ksh but orders 100 Trays
+                if (data.amount < expectedTotal) {
+                    alert(`⚠️ PAYMENT MISMATCH!\n\nExpected: Ksh ${expectedTotal}\nPaid: Ksh ${data.amount}\n\nTransaction rejected due to insufficient funds.`);
+                    resetBtn();
+                    return;
+                }
+
+                // 6. SUCCESS! MARK AS USED IMMEDIATELY
+                await updateDoc(docRef, { 
+                    used: true, 
+                    usedBy: auth.currentUser.uid,
+                    claimedAt: new Date()
+                });
+
+                // 7. CREATE ORDER (Pass the M-Pesa phone number)
+                await finalizeOrder(codeInput, data.phone); 
+                document.getElementById('mpesa-modal').style.display = 'none';
+                resetBtn();
+
+            } else {
+                // NOT FOUND YET
+                if (attempts >= maxAttempts) {
+                    clearInterval(pollLoop);
+                    alert("❌ Payment Code Not Found.\n\n1. Ensure Admin has received the SMS.\n2. Ensure code matches exactly.\n3. Contact Support if deducted.");
+                    resetBtn();
+                }
+            }
+        } catch (err) {
+            clearInterval(pollLoop);
+            console.error(err);
+            alert("Connection Error. Please try again.");
+            resetBtn();
+        }
+    }, 3000); // Wait 3 seconds between checks
+
+    function resetBtn() {
+        btn.disabled = false;
+        btn.innerHTML = "Verify Payment";
+    }
+};
 
 function generateOrderCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
@@ -145,124 +192,47 @@ function generateOrderCode() {
     return result;
 }
 
-
-
-window.verifyPayment = async () => {
-    const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
-    const btn = document.getElementById('payBtn');
-    
-    if(codeInput.length < 10) return alert("Please enter a valid 10-character M-Pesa code.");
-
+async function finalizeOrder(mpesaCode, phoneNumber) {
     const quantity = parseInt(document.getElementById('shopQty').innerText);
-    
-    // 1. FORCE Cart Total to a Number
-    const expectedTotal = Number(quantity * currentEggPrice);
+    const totalPrice = quantity * currentEggPrice;
+    const item = "Tray of 30";
+    const deliveryCode = generateOrderCode();
 
-    btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying Amount...`;
+    // Prepare location data
+    const locationData = {
+        lat: userLocation.lat || null,
+        lng: userLocation.lng || null
+    };
 
-    let attempts = 0;
-    const maxAttempts = 10; 
+    try {
+        await addDoc(collection(db, "orders"), {
+            userId: auth.currentUser.uid,
+            userName: auth.currentUser.displayName || "Customer",
+            item, 
+            unitPrice: currentEggPrice, 
+            quantity, 
+            totalPrice,
+            status: 'Pending',
+            mpesaNumber: phoneNumber || "Verified", 
+            mpesaCode: mpesaCode,
+            address: userLocation.address,
+            locationCoords: locationData,
+            deliveryCode: deliveryCode, 
+            createdAt: new Date()
+        });
+        
+        await createNotification(`Order Placed! Your Delivery Code is: ${deliveryCode}`);
+        
+        // Show success and redirect
+        alert(`✅ Payment Verified!\n\nYOUR DELIVERY CODE: ${deliveryCode}\n(Show this to the driver)`);
+        window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
+        generateWhatsAppLink(quantity, totalPrice, userLocation.address, deliveryCode);
 
-    const pollLoop = setInterval(async () => {
-        attempts++;
-        try {
-            const mpesaRef = doc(db, "mpesa_payments", codeInput);
-            const docSnap = await getDoc(mpesaRef);
-
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                clearInterval(pollLoop);
-                
-                if (data.used) {
-                    alert("❌ This code was already used for another order.");
-                    resetBtn();
-                    return;
-                }
-
-                // 2. FORCE M-Pesa Amount to a Number
-                const paidAmount = Number(data.amount);
-
-                // 3. THE STRICT CHECK (Must be EXACTLY equal)
-                if (paidAmount !== expectedTotal) {
-                    alert(`❌ PAYMENT ERROR: AMOUNT MISMATCH!\n\n` +
-                          `Cart Total: Ksh ${expectedTotal}\n` +
-                          `M-Pesa Sent: Ksh ${paidAmount}\n\n` +
-                          `The amounts must be EXACTLY the same. Please contact support if you overpaid.`);
-                    resetBtn();
-                    return;
-                }
-
-                // 4. PROCEED ONLY IF EXACT MATCH
-                try {
-                    const batch = writeBatch(db);
-                    const newOrderRef = doc(collection(db, "orders"));
-                    const deliveryCode = generateOrderCode();
-                    
-                    const safeLocation = {
-                        lat: (userLocation && userLocation.lat) ? userLocation.lat : null,
-                        lng: (userLocation && userLocation.lng) ? userLocation.lng : null
-                    };
-
-                    batch.set(newOrderRef, {
-                        userId: auth.currentUser.uid,
-                        userName: auth.currentUser.displayName || "Customer",
-                        item: "Tray of 30", 
-                        unitPrice: currentEggPrice, 
-                        quantity: quantity, 
-                        totalPrice: expectedTotal,
-                        status: 'Pending',
-                        mpesaNumber: data.phone || "Verified", 
-                        mpesaCode: codeInput,
-                        address: userLocation.address,
-                        locationCoords: safeLocation,
-                        deliveryCode: deliveryCode, 
-                        createdAt: new Date()
-                    });
-
-                    batch.update(mpesaRef, { 
-                        used: true, 
-                        usedBy: auth.currentUser.uid,
-                        claimedAt: new Date()
-                    });
-
-                    const stockRef = doc(db, "config", "pricing");
-                    batch.update(stockRef, { currentStock: currentStock - quantity });
-
-                    await batch.commit();
-
-                    document.getElementById('mpesa-modal').style.display = 'none';
-                    resetBtn();
-                    await createNotification(`Order Success! Code: ${deliveryCode}`);
-                    alert(`✅ Payment Verified!\n\nDELIVERY CODE: ${deliveryCode}`);
-                    
-                    window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
-                    generateWhatsAppLink(quantity, expectedTotal, userLocation.address, deliveryCode);
-
-                } catch (batchError) {
-                    console.error(batchError);
-                    alert("Order failed. Check console for details.");
-                    resetBtn();
-                }
-
-            } else if (attempts >= maxAttempts) {
-                clearInterval(pollLoop);
-                alert("❌ Code not found in system yet.");
-                resetBtn();
-            }
-        } catch (err) {
-            clearInterval(pollLoop);
-            alert("Connection Error.");
-            resetBtn();
-        }
-    }, 3000); 
-
-    function resetBtn() {
-        btn.disabled = false;
-        btn.innerHTML = "Verify Payment";
+    } catch(e) {
+        alert("Error saving order: " + e.message);
+        console.error(e);
     }
-};
-
+}
 
 function generateWhatsAppLink(qty, total, loc, code) {
     const btn = document.querySelector('.whatsapp-float');
@@ -334,10 +304,7 @@ async function loadUserSettings() {
             }
             if (data.location) {
                 userLocation = data.location;
-                const locText = document.getElementById('currentCoords');
-                if(locText) locText.innerText = data.location.address;
-                const locTitle = document.getElementById('locationStatus');
-                if(locTitle) locTitle.style.color = "var(--primary-dark)";
+                if(document.getElementById('currentCoords')) document.getElementById('currentCoords').innerText = data.location.address;
             }
         }
     } catch(e) { console.error(e); }
@@ -359,40 +326,35 @@ window.changeLanguage = async (lang) => {
     if (auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { lang }, { merge: true });
 };
 
-// ==========================================
-// 📍 FIXED LOCATION LOGIC (GPS + MANUAL)
-// ==========================================
-
+// --- LOCATION LOGIC (High Accuracy) ---
 window.initLocationFlow = function() {
-    const choice = confirm("Use GPS for exact delivery location?\n\n[OK] = Use GPS (Best for Drivers)\n[Cancel] = Select Area List");
+    const choice = confirm("Use GPS for exact delivery location?\n(We recommend 'OK' for accuracy)");
     if (choice) {
-        if (!navigator.geolocation) {
-            alert("GPS not supported on this device. Opening list...");
-            return window.openLocationSearch();
-        }
+        if (!navigator.geolocation) return window.openLocationSearch();
         
+        // Request High Accuracy
         navigator.geolocation.getCurrentPosition(
             async (pos) => {
+                // Save Lat/Lng properly
                 userLocation = { 
                     lat: pos.coords.latitude, 
                     lng: pos.coords.longitude, 
-                    address: "GPS Location (Exact Pin)", 
+                    address: "GPS Location (Mombasa)", 
                     timestamp: new Date() 
                 };
                 
-                await saveLoc();
-                alert("✅ GPS Location Saved!\nThe driver will see your exact map pin.");
+                // Reverse Geocoding optional, but for now we label it GPS
+                saveLoc();
+                alert("✅ GPS Location set! Orders will now include your exact map pin.");
             }, 
             (err) => { 
-                console.error("GPS Error:", err);
-                alert("⚠️ GPS Failed or Denied.\nPlease select your area manually."); 
+                console.error(err);
+                alert("GPS failed or denied. Please select area manually."); 
                 window.openLocationSearch(); 
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
-    } else { 
-        window.openLocationSearch(); 
-    }
+    } else { window.openLocationSearch(); }
 };
 
 window.openLocationSearch = () => {
@@ -419,23 +381,18 @@ window.filterLocations = () => {
 };
 
 window.selectLocation = (address) => {
+    // Manual selection has NO coordinates, only address text
     userLocation = { address: address, lat: null, lng: null };
-    saveLoc().then(() => {
-        document.getElementById('location-modal').style.display = 'none';
-        alert(`Location set to: ${address}`);
-    });
+    saveLoc();
+    document.getElementById('location-modal').style.display = 'none';
 };
 
 async function saveLoc() {
     if(!userLocation) return;
-    const el = document.getElementById('currentCoords');
-    if(el) el.innerText = userLocation.address;
-    if(auth.currentUser) {
-        await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
-    }
+    document.getElementById('currentCoords').innerText = userLocation.address;
+    if(auth.currentUser) await setDoc(doc(db, "users", auth.currentUser.uid), { location: userLocation }, { merge: true });
 }
 
-// --- NOTIFICATIONS ---
 async function createNotification(msg) {
     if(!auth.currentUser) return;
     await addDoc(collection(db, "notifications"), {
@@ -518,13 +475,18 @@ if(heroBtn) heroBtn.onclick = () => window.showPage('shop', document.querySelect
 
 window.logoutUser = () => signOut(auth).then(() => location.reload());
 
+
+// --- TEST FUNCTION ---
+// This acts exactly like MacroDroid. It creates a fake payment in the database.
 window.simulateTestPayment = async () => {
-    const testCode = "TEST" + Math.floor(100000 + Math.random() * 900000); 
+    const testCode = "TEST" + Math.floor(100000 + Math.random() * 900000); // Generates TEST123456
     const amountStr = prompt("Enter Amount to Simulate (e.g. 11550):", "11550");
+    
     if(!amountStr) return;
     const testAmount = parseInt(amountStr);
 
     try {
+        // Write directly to the same collection MacroDroid uses
         await setDoc(doc(db, "mpesa_payments", testCode), {
             transactionId: testCode,
             amount: testAmount,
@@ -534,9 +496,13 @@ window.simulateTestPayment = async () => {
             method: "Simulation",
             timestamp: new Date()
         });
+
+        // Auto-fill the box so you can verify it immediately
         document.getElementById('mpesaCodeInput').value = testCode;
-        alert(`✅ Test Payment Sent to Database!\n\nCode: ${testCode}\nAmount: ${testAmount}`);
+        alert(`✅ Test Payment Sent to Database!\n\nCode: ${testCode}\nAmount: ${testAmount}\n\nNow click 'Verify Payment' to finish.`);
+        
     } catch(e) {
         alert("Error simulating payment: " + e.message);
+        console.error(e);
     }
 };
