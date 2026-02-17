@@ -15,6 +15,11 @@
         }
     </style>
     <script type="module" src="script.js" defer></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+    
 </head>
 <body class="not-logged-in">
 
@@ -157,6 +162,9 @@
                     <h3 data-i18n="prodTray">Tray of 30</h3>
                     <div class="prod-desc">Fresh Kienyeji Eggs (Yellow Yolk)</div>
                     <div class="price-row"><span>Ksh</span> <span id="dynamicPriceDisplay">...</span> <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
+                   <div id="stockDisplay" style="font-size: 13px; font-weight: 600; margin-bottom: 15px; color: #666;">Loading Stock...</div>
+
+                    
                     <div class="warning-box" style="background:#fff3cd; color:#856404; padding:8px; border-radius:8px; font-size:11px; margin-bottom:10px;">
                         <i class="fa-solid fa-triangle-exclamation"></i> Minimum Order: 30 Trays
                     </div>
