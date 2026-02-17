@@ -470,20 +470,15 @@ function listenToNotifications() {
 function listenToOrders() {
     if(!auth.currentUser) return;
     const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser.uid));
-    
     onSnapshot(q, (snap) => {
         const countEl = document.getElementById('homeOrderCount');
         if(countEl) countEl.innerText = snap.size;
         
         const list = document.getElementById('ordersList');
-        // Reset Map
-        window.ordersDataMap = {};
-
         if(list) list.innerHTML = snap.empty ? '<p style="text-align:center;color:#888;margin-top:20px;">No orders yet.</p>' : '';
         
-        const docs = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.createdAt.seconds - a.createdAt.seconds);
+        const docs = snap.docs.map(d => d.data()).sort((a,b) => b.createdAt.seconds - a.createdAt.seconds);
         
-        // Update Home "Recent Activity" Card
         if(docs.length > 0) {
             const last = docs[0];
             if(document.getElementById('recentItemName')) document.getElementById('recentItemName').innerText = `${last.quantity}x ${last.item}`;
@@ -494,35 +489,21 @@ function listenToOrders() {
         if(list) {
             list.innerHTML = "";
             docs.forEach(o => {
-                // Store data for the PDF generator
-                window.ordersDataMap[o.id] = o;
-
                 const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Delivery Code: ${o.deliveryCode}</small>` : '';
-                
                 list.innerHTML += `
-                <div class="mini-order" style="margin-bottom:10px; display:flex; flex-wrap:wrap;">
-                    <div style="display:flex; align-items:center; width:100%;">
-                        <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
-                        <div class="details" style="flex:1;">
-                            <h4>${o.quantity}x ${o.item}</h4>
-                            <small>${o.status} • ${o.address}</small>
-                            ${codeHtml}
-                        </div>
-                        <span class="price">Ksh ${o.totalPrice}</span>
+                <div class="mini-order" style="margin-bottom:10px;">
+                    <div class="icon-box"><i class="fa-solid fa-egg"></i></div>
+                    <div class="details">
+                        <h4>${o.quantity}x ${o.item}</h4>
+                        <small>${o.status} • ${o.address}</small>
+                        ${codeHtml}
                     </div>
-                    
-                    <div style="width:100%; margin-top:10px; padding-top:10px; border-top:1px dashed #eee; display:flex; justify-content:flex-end;">
-                         <button onclick="window.generateReceiptPDF(window.ordersDataMap['${o.id}'])" 
-                            style="background:#FFEBEE; color:#D32F2F; border:none; padding:8px 15px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer;">
-                            <i class="fa-solid fa-file-pdf"></i> Download Receipt
-                         </button>
-                    </div>
+                    <span class="price">Ksh ${o.totalPrice}</span>
                 </div>`;
             });
         }
     });
 }
-
 
 window.showPage = (id, el) => {
     document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
@@ -559,108 +540,3 @@ window.simulateTestPayment = async () => {
         alert("Error simulating payment: " + e.message);
     }
 };
-
-
-// ==========================================
-// 📄 PROFESSIONAL PDF RECEIPT GENERATOR
-// ==========================================
-window.generateReceiptPDF = (orderData) => {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    // -- COLORS --
-    const primaryColor = [255, 179, 0]; // Your Brand Yellow
-    const darkColor = [26, 29, 31];     // Dark Grey
-
-    // -- HEADER --
-    // Gold Bar at top
-    doc.setFillColor(...primaryColor);
-    doc.rect(0, 0, 210, 40, 'F');
-
-    // Title
-    doc.setFontSize(22);
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.text("EggMaster Wholesale", 105, 20, { align: "center" });
-    
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text("Official Payment Receipt", 105, 30, { align: "center" });
-
-    // -- ORDER INFO SECTION --
-    doc.setTextColor(...darkColor);
-    doc.setFontSize(10);
-    
-    const startY = 55;
-    const dateStr = orderData.createdAt.toDate ? orderData.createdAt.toDate().toLocaleString() : new Date(orderData.createdAt).toLocaleString();
-
-    // Left Side: Customer Info
-    doc.setFont("helvetica", "bold");
-    doc.text("BILLED TO:", 14, startY);
-    doc.setFont("helvetica", "normal");
-    doc.text(orderData.userName || "Valued Customer", 14, startY + 6);
-    doc.text(orderData.address || "Mombasa, Kenya", 14, startY + 12);
-    doc.text(`Tel: ${orderData.mpesaNumber || "N/A"}`, 14, startY + 18);
-
-    // Right Side: Order Details
-    doc.setFont("helvetica", "bold");
-    doc.text("RECEIPT DETAILS:", 140, startY);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Order Ref: #${orderData.deliveryCode || "PENDING"}`, 140, startY + 6);
-    doc.text(`Date: ${dateStr}`, 140, startY + 12);
-    doc.text(`Status: ${orderData.status}`, 140, startY + 18);
-
-    // -- TABLE OF ITEMS --
-    doc.autoTable({
-        startY: startY + 30,
-        head: [['Description', 'Quantity', 'Unit Price', 'Total']],
-        body: [
-            [
-                orderData.item, 
-                orderData.quantity + " Trays", 
-                "Ksh " + orderData.unitPrice, 
-                "Ksh " + orderData.totalPrice.toLocaleString()
-            ]
-        ],
-        theme: 'grid',
-        headStyles: { fillColor: darkColor, textColor: [255, 255, 255] },
-        styles: { fontSize: 11, cellPadding: 5 },
-    });
-
-    // -- TOTALS SECTION --
-    const finalY = doc.lastAutoTable.finalY + 10;
-    
-    doc.setFontSize(12);
-    doc.text(`Subtotal:`, 140, finalY);
-    doc.text(`Ksh ${orderData.totalPrice.toLocaleString()}`, 170, finalY);
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(`TOTAL PAID:`, 140, finalY + 10);
-    doc.setTextColor(46, 125, 50); // Green Color
-    doc.text(`Ksh ${orderData.totalPrice.toLocaleString()}`, 170, finalY + 10);
-
-    // -- FOOTER --
-    doc.setTextColor(...darkColor);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    
-    // M-Pesa Code Box
-    doc.setDrawColor(200, 200, 200);
-    doc.roundedRect(14, finalY + 25, 180, 20, 3, 3, 'S');
-    doc.text(`Payment Method: M-Pesa`, 20, finalY + 33);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Transaction Code: ${orderData.mpesaCode || "N/A"}`, 20, finalY + 40);
-
-    // Bottom Note
-    doc.setFontSize(9);
-    doc.setTextColor(100, 100, 100);
-    doc.text("Thank you for your business!", 105, 280, { align: "center" });
-    doc.text("For support call: 0700 000 000", 105, 285, { align: "center" });
-
-    // Save File
-    doc.save(`Receipt_EggMaster_${orderData.deliveryCode || "Order"}.pdf`);
-};
-
-// Global Store to hold order data for downloading
-window.ordersDataMap = {};
