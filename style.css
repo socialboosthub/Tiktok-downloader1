@@ -385,3 +385,49 @@ input:checked + .slider:before { transform: translateX(20px); }
 .whatsapp-float:active {
     transform: scale(0.9);
 }
+
+
+/* =========================================
+   8. WALLET & NEW PAYMENT STYLES
+   ========================================= */
+
+/* Wallet Card on Home Screen */
+.wallet-card-home {
+    background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+    color: white;
+    padding: 20px;
+    border-radius: var(--radius-lg);
+    margin: 0 24px 20px;
+    box-shadow: 0 10px 30px -5px rgba(46, 125, 50, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.wallet-card-home::after {
+    content: '\f555'; /* FontAwesome Wallet Icon */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    position: absolute;
+    right: -20px;
+    bottom: -30px;
+    font-size: 100px;
+    opacity: 0.1;
+    transform: rotate(-20deg);
+}
+
+.wallet-label { font-size: 12px; opacity: 0.8; letter-spacing: 1px; text-transform: uppercase; }
+.wallet-amount { font-size: 32px; font-weight: 700; margin: 5px 0; }
+.wallet-note { font-size: 11px; opacity: 0.9; background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 20px; display: inline-block; }
+
+/* Payment Modal Breakdown */
+.payment-summary {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+.pay-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #555; }
+.pay-row.total { font-weight: 700; color: #000; border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 5px; font-size: 15px; }
+.pay-row.wallet-deduction { color: #2E7D32; font-weight: 600; }
+
