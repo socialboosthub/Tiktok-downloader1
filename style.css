@@ -431,3 +431,38 @@ input:checked + .slider:before { transform: translateX(20px); }
 .pay-row.total { font-weight: 700; color: #000; border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 5px; font-size: 15px; }
 .pay-row.wallet-deduction { color: #2E7D32; font-weight: 600; }
 
+
+/* =========================================
+   WALLET UI STYLES (NEW)
+   ========================================= */
+.wallet-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #E8F5E9; 
+    color: #2E7D32; 
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: var(--shadow-card);
+    border: 1px solid #C8E6C9;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.wallet-badge:active {
+    transform: scale(0.95);
+}
+
+.wallet-badge i {
+    font-size: 14px;
+}
+
+#walletDeductionText {
+    background: #E8F5E9;
+    padding: 6px;
+    border-radius: 6px;
+    text-align: center;
+}
+
