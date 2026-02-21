@@ -15,11 +15,8 @@
         }
     </style>
     <script type="module" src="script.js" defer></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body class="not-logged-in">
 
@@ -45,7 +42,6 @@
     </div>
 
     <div id="mpesa-modal" class="modal-overlay">
-        
         <div class="modal-content">
             <div style="text-align:center; margin-bottom:15px;">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" style="height:40px;" alt="M-Pesa">
@@ -53,10 +49,14 @@
             <h3>Payment Required</h3>
             
             <div style="background:#f9f9f9; padding:15px; border-radius:10px; font-size:13px; margin-bottom:15px; border:1px dashed #ccc;">
+                <p style="margin:0 0 5px; color:#555;">Order Total: <strong>Ksh <span id="mpesaOrderTotal">0</span></strong></p>
+                <p id="walletDeductionText" style="margin:0 0 5px; color:#2E7D32; display:none;">Wallet Applied: <strong>-Ksh <span id="mpesaWalletUsed">0</span></strong></p>
+                <hr style="border: 0; border-top: 1px solid #ddd; margin: 8px 0;">
                 <p style="margin:0 0 5px;"><strong>1. Go to M-Pesa > Lipa na M-Pesa</strong></p>
                 <p style="margin:0 0 5px;"><strong>2. Buy Goods / Paybill</strong></p>
                 <p style="margin:0 0 5px;">Till: <strong>123456</strong> (Agent Name)</p>
-                <p style="margin:0;">Amount: <strong>Ksh <span id="mpesaTotalDisplay">0</span></strong></p>
+                <p style="margin:0; font-size: 15px;">Amount to Pay: <strong style="color: #D32F2F;">Ksh <span id="mpesaTotalDisplay">0</span></strong></p>
+                <p style="margin:5px 0 0; font-size:10px; color:#666;">*Any excess amount paid will be saved to your Wallet.</p>
             </div>
             
             <div class="input-group">
@@ -112,6 +112,11 @@
             <h3 id="usernameDisplay">Egg Wholesaler</h3>
         </div>
         <div class="header-actions">
+            <div class="wallet-badge" id="walletContainer" style="display:none;">
+                <i class="fa-solid fa-wallet"></i>
+                <span id="walletDisplay">0</span>
+            </div>
+
             <div class="icon-btn" onclick="window.showPage('notifications-page', null)">
                 <i class="fa-regular fa-bell"></i>
                 <div id="notifBadge" class="dot-badge" style="display:none;"></div>
@@ -163,8 +168,6 @@
                     <div class="prod-desc">Fresh Kienyeji Eggs (Yellow Yolk)</div>
                     <div class="price-row"><span>Ksh</span> <span id="dynamicPriceDisplay">...</span> <small style="font-size:12px; color:#666; font-weight:400">per tray</small></div>
                    <div id="stockDisplay" style="font-size: 13px; font-weight: 600; margin-bottom: 15px; color: #666;">Loading Stock...</div>
-
-                    
                     <div class="warning-box" style="background:#fff3cd; color:#856404; padding:8px; border-radius:8px; font-size:11px; margin-bottom:10px;">
                         <i class="fa-solid fa-triangle-exclamation"></i> Minimum Order: 30 Trays
                     </div>
@@ -248,3 +251,4 @@
 
 </body>
 </html>
+
