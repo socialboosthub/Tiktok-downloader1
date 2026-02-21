@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+// ADDED 'writeBatch' to imports below:
 import { getFirestore, collection, addDoc, query, where, doc, getDoc, setDoc, onSnapshot, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
@@ -21,8 +22,7 @@ const provider = new GoogleAuthProvider();
 
 let userLocation = null;
 let currentEggPrice = 385; 
-let currentStock = 0;
-let userWalletBalance = 0; // GLOBAL WALLET VARIABLE
+let currentStock = 0; 
 
 // Mombasa Areas
 const MOMBASA_AREAS = [
@@ -68,7 +68,7 @@ window.handleLogin = async () => {
 const loginBtn = document.getElementById('google-login-btn');
 if (loginBtn) loginBtn.onclick = window.handleLogin;
 
-// --- DYNAMIC PRICE & WALLET LISTENER ---
+// --- DYNAMIC PRICE ---
 async function fetchLivePrice() {
     try {
         onSnapshot(doc(db, "config", "pricing"), (doc) => {
@@ -77,22 +77,26 @@ async function fetchLivePrice() {
                 currentEggPrice = data.currentPrice || 385;
                 currentStock = data.currentStock || 0; 
             }
+            
+            // Update Price Display
             const priceDisplay = document.getElementById('dynamicPriceDisplay');
             if(priceDisplay) priceDisplay.innerText = currentEggPrice;
 
+            // Update Stock Display
             const stockDisplay = document.getElementById('stockDisplay');
             if(stockDisplay) {
                 if(currentStock > 0) {
                     stockDisplay.innerHTML = `<i class="fa-solid fa-boxes-stacked"></i> ${currentStock} Trays Available`;
-                    stockDisplay.style.color = "#2E7D32"; 
+                    stockDisplay.style.color = "#2E7D32"; // Green
                 } else {
                     stockDisplay.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Out of Stock`;
-                    stockDisplay.style.color = "#F44336"; 
+                    stockDisplay.style.color = "#F44336"; // Red
                 }
             }
         });
     } catch(e) { console.error("Error fetching price/stock", e); }
 }
+
 
 // --- ORDER LOGIC ---
 window.updateQty = (change) => {
@@ -103,14 +107,10 @@ window.updateQty = (change) => {
     display.innerText = newVal;
 };
 
-// GLOBAL VARIABLES FOR PAYMENT VERIFICATION
-let pendingOrderTotal = 0;
-let pendingWalletUsage = 0;
-let pendingPayable = 0;
-
 window.initiateOrder = () => {
     if (!auth.currentUser) return alert("Please login first.");
     
+    // STRICT LOCATION CHECK
     if (!userLocation || !userLocation.address) {
         if(confirm("⚠️ Delivery Location Missing!\n\nPlease set your location to continue.")) {
             window.showPage('settings', document.querySelectorAll('.nav-item')[3]);
@@ -121,50 +121,20 @@ window.initiateOrder = () => {
     
     const quantity = parseInt(document.getElementById('shopQty').innerText);
 
+    // CHECK STOCK BEFORE ORDERING
     if (quantity > currentStock) {
         return alert(`⚠️ Not enough stock!\n\nAvailable: ${currentStock} Trays\nYou want: ${quantity} Trays\n\nPlease reduce quantity.`);
     }
 
-    // 1. CALCULATE COSTS
-    pendingOrderTotal = quantity * currentEggPrice;
-    
-    // 2. CALCULATE WALLET USAGE
-    // We use as much of the wallet as possible, but not more than the total
-    if (userWalletBalance >= pendingOrderTotal) {
-        pendingWalletUsage = pendingOrderTotal;
-        pendingPayable = 0;
-    } else {
-        pendingWalletUsage = userWalletBalance;
-        pendingPayable = pendingOrderTotal - userWalletBalance;
-    }
-
-    // 3. UPDATE UI IN MODAL
-    document.getElementById('summOrderTotal').innerText = pendingOrderTotal.toLocaleString();
-    
-    if (pendingWalletUsage > 0) {
-        document.getElementById('summWalletRow').style.display = 'flex';
-        document.getElementById('summWalletUsed').innerText = pendingWalletUsage.toLocaleString();
-    } else {
-        document.getElementById('summWalletRow').style.display = 'none';
-    }
-
-    document.getElementById('mpesaTotalDisplay').innerText = pendingPayable.toLocaleString();
-    document.getElementById('payInstructionAmount').innerText = pendingPayable.toLocaleString();
+    const total = quantity * currentEggPrice;
+    document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
     document.getElementById('mpesaCodeInput').value = "";
-    
-    // 4. SHOW MODAL (Handle 0 Payment case immediately inside modal logic or here)
-    if (pendingPayable === 0) {
-        // Instant Buy with Wallet
-        if(confirm(`Pay fully using Wallet Balance (Ksh ${pendingWalletUsage})?`)) {
-            processWalletOnlyOrder(quantity);
-        }
-    } else {
-        document.getElementById('manualPayInstructions').style.display = 'block';
-        document.getElementById('mpesaCodeInput').style.display = 'block';
-        document.getElementById('payBtn').innerText = "Verify Payment";
-        document.getElementById('mpesa-modal').style.display = 'flex';
-    }
+    document.getElementById('mpesa-modal').style.display = 'flex';
 };
+
+// ==========================================
+// 🔥 REWRITTEN PAYMENT & ORDER SYSTEM (FIXED)
+// ==========================================
 
 function generateOrderCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
@@ -175,65 +145,7 @@ function generateOrderCode() {
     return result;
 }
 
-// ==========================================
-// 🔥 WALLET ONLY PROCESSING
-// ==========================================
-async function processWalletOnlyOrder(quantity) {
-    try {
-        const batch = writeBatch(db);
-        const newOrderRef = doc(collection(db, "orders"));
-        const deliveryCode = generateOrderCode();
-        
-        const safeLocation = {
-            lat: (userLocation && userLocation.lat) ? userLocation.lat : null,
-            lng: (userLocation && userLocation.lng) ? userLocation.lng : null
-        };
 
-        // Create Order
-        batch.set(newOrderRef, {
-            userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || "Customer",
-            item: "Tray of 30", 
-            unitPrice: currentEggPrice, 
-            quantity: quantity, 
-            totalPrice: pendingOrderTotal,
-            paidViaWallet: pendingWalletUsage,
-            paidViaMpesa: 0,
-            status: 'Pending',
-            mpesaNumber: "Wallet", 
-            mpesaCode: "WALLET-PAY",
-            address: userLocation.address,
-            locationCoords: safeLocation,
-            deliveryCode: deliveryCode, 
-            createdAt: new Date()
-        });
-
-        // Deduct Wallet
-        const userRef = doc(db, "users", auth.currentUser.uid);
-        // Note: We calculate new balance explicitly to be safe
-        const newBalance = userWalletBalance - pendingWalletUsage; 
-        batch.update(userRef, { walletBalance: newBalance });
-
-        // Deduct Stock
-        const stockRef = doc(db, "config", "pricing");
-        batch.update(stockRef, { currentStock: currentStock - quantity });
-
-        await batch.commit();
-        
-        // Success
-        await createNotification(`Order Success! Code: ${deliveryCode}`);
-        alert(`✅ Paid with Wallet!\n\nDELIVERY CODE: ${deliveryCode}`);
-        window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
-        generateWhatsAppLink(quantity, pendingOrderTotal, userLocation.address, deliveryCode);
-
-    } catch (e) {
-        alert("Error processing wallet order: " + e.message);
-    }
-}
-
-// ==========================================
-// 🔥 M-PESA + WALLET VERIFICATION (SMART)
-// ==========================================
 
 window.verifyPayment = async () => {
     const codeInput = document.getElementById('mpesaCodeInput').value.toUpperCase().trim();
@@ -243,8 +155,8 @@ window.verifyPayment = async () => {
 
     const quantity = parseInt(document.getElementById('shopQty').innerText);
     
-    // We expect the user to pay 'pendingPayable' via M-Pesa
-    const amountExpectedViaMpesa = Number(pendingPayable);
+    // 1. FORCE Cart Total to a Number
+    const expectedTotal = Number(quantity * currentEggPrice);
 
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying Amount...`;
@@ -263,27 +175,25 @@ window.verifyPayment = async () => {
                 clearInterval(pollLoop);
                 
                 if (data.used) {
-                    alert("❌ This code was already used.");
+                    alert("❌ This code was already used for another order.");
                     resetBtn();
                     return;
                 }
 
-                const amountSent = Number(data.amount);
+                // 2. FORCE M-Pesa Amount to a Number
+                const paidAmount = Number(data.amount);
 
-                // CHECK FOR SHORT PAYMENT
-                if (amountSent < amountExpectedViaMpesa) {
-                    alert(`❌ INSUFFICIENT AMOUNT!\n\n` +
-                          `Expected: Ksh ${amountExpectedViaMpesa}\n` +
-                          `Received: Ksh ${amountSent}\n\n` +
-                          `Please contact support to complete this payment.`);
+                // 3. THE STRICT CHECK (Must be EXACTLY equal)
+                if (paidAmount !== expectedTotal) {
+                    alert(`❌ PAYMENT ERROR: AMOUNT MISMATCH!\n\n` +
+                          `Cart Total: Ksh ${expectedTotal}\n` +
+                          `M-Pesa Sent: Ksh ${paidAmount}\n\n` +
+                          `The amounts must be EXACTLY the same. Please contact support if you overpaid.`);
                     resetBtn();
                     return;
                 }
 
-                // CALCULATE EXCESS (TO SAVE TO WALLET)
-                const excessAmount = amountSent - amountExpectedViaMpesa;
-
-                // PROCEED WITH ORDER
+                // 4. PROCEED ONLY IF EXACT MATCH
                 try {
                     const batch = writeBatch(db);
                     const newOrderRef = doc(collection(db, "orders"));
@@ -300,9 +210,7 @@ window.verifyPayment = async () => {
                         item: "Tray of 30", 
                         unitPrice: currentEggPrice, 
                         quantity: quantity, 
-                        totalPrice: pendingOrderTotal, // The full cost of goods
-                        paidViaWallet: pendingWalletUsage,
-                        paidViaMpesa: amountSent, // What they actually sent
+                        totalPrice: expectedTotal,
                         status: 'Pending',
                         mpesaNumber: data.phone || "Verified", 
                         mpesaCode: codeInput,
@@ -312,23 +220,12 @@ window.verifyPayment = async () => {
                         createdAt: new Date()
                     });
 
-                    // Mark Code Used
                     batch.update(mpesaRef, { 
                         used: true, 
                         usedBy: auth.currentUser.uid,
                         claimedAt: new Date()
                     });
 
-                    // WALLET MATH:
-                    // 1. We used 'pendingWalletUsage' from the old balance.
-                    // 2. We add 'excessAmount' to the result.
-                    // New Balance = (OldBalance - Used) + Excess
-                    const finalNewWalletBalance = (userWalletBalance - pendingWalletUsage) + excessAmount;
-
-                    const userRef = doc(db, "users", auth.currentUser.uid);
-                    batch.update(userRef, { walletBalance: finalNewWalletBalance });
-
-                    // Deduct Stock
                     const stockRef = doc(db, "config", "pricing");
                     batch.update(stockRef, { currentStock: currentStock - quantity });
 
@@ -336,17 +233,11 @@ window.verifyPayment = async () => {
 
                     document.getElementById('mpesa-modal').style.display = 'none';
                     resetBtn();
-                    
-                    let successMsg = `✅ Order Success!\nCode: ${deliveryCode}`;
-                    if(excessAmount > 0) {
-                        successMsg += `\n\n💰 Ksh ${excessAmount} has been added to your Wallet!`;
-                    }
-                    
-                    await createNotification(`Order Placed. Code: ${deliveryCode}`);
-                    alert(successMsg);
+                    await createNotification(`Order Success! Code: ${deliveryCode}`);
+                    alert(`✅ Payment Verified!\n\nDELIVERY CODE: ${deliveryCode}`);
                     
                     window.showPage('orders', document.querySelectorAll('.nav-item')[2]);
-                    generateWhatsAppLink(quantity, pendingOrderTotal, userLocation.address, deliveryCode);
+                    generateWhatsAppLink(quantity, expectedTotal, userLocation.address, deliveryCode);
 
                 } catch (batchError) {
                     console.error(batchError);
@@ -356,7 +247,7 @@ window.verifyPayment = async () => {
 
             } else if (attempts >= maxAttempts) {
                 clearInterval(pollLoop);
-                alert("❌ Code not found yet. Did you receive the SMS?");
+                alert("❌ Code not found in system yet.");
                 resetBtn();
             }
         } catch (err) {
@@ -434,30 +325,21 @@ window.saveProfile = async () => {
 async function loadUserSettings() {
     if (!auth.currentUser) return;
     try {
-        // Use onSnapshot for Realtime Wallet Updates
-        onSnapshot(doc(db, "users", auth.currentUser.uid), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                
-                // Theme
-                if (data.theme === 'dark') {
-                    document.body.setAttribute('data-theme', 'dark');
-                    if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = true;
-                }
-                
-                // Location
-                if (data.location) {
-                    userLocation = data.location;
-                    const locText = document.getElementById('currentCoords');
-                    if(locText) locText.innerText = data.location.address;
-                }
-
-                // WALLET UPDATE
-                userWalletBalance = data.walletBalance || 0;
-                const homeWallet = document.getElementById('homeWalletBalance');
-                if(homeWallet) homeWallet.innerText = userWalletBalance.toLocaleString();
+        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.theme === 'dark') {
+                document.body.setAttribute('data-theme', 'dark');
+                if(document.getElementById('themeToggle')) document.getElementById('themeToggle').checked = true;
             }
-        });
+            if (data.location) {
+                userLocation = data.location;
+                const locText = document.getElementById('currentCoords');
+                if(locText) locText.innerText = data.location.address;
+                const locTitle = document.getElementById('locationStatus');
+                if(locTitle) locTitle.style.color = "var(--primary-dark)";
+            }
+        }
     } catch(e) { console.error(e); }
 }
 
@@ -478,7 +360,7 @@ window.changeLanguage = async (lang) => {
 };
 
 // ==========================================
-// 📍 LOCATION LOGIC
+// 📍 FIXED LOCATION LOGIC (GPS + MANUAL)
 // ==========================================
 
 window.initLocationFlow = function() {
@@ -594,7 +476,8 @@ function listenToOrders() {
         if(countEl) countEl.innerText = snap.size;
         
         const list = document.getElementById('ordersList');
-        window.ordersDataMap = {}; // Reset PDF Map
+        // Reset Map
+        window.ordersDataMap = {};
 
         if(list) list.innerHTML = snap.empty ? '<p style="text-align:center;color:#888;margin-top:20px;">No orders yet.</p>' : '';
         
@@ -611,7 +494,9 @@ function listenToOrders() {
         if(list) {
             list.innerHTML = "";
             docs.forEach(o => {
+                // Store data for the PDF generator
                 window.ordersDataMap[o.id] = o;
+
                 const codeHtml = o.deliveryCode ? `<br><small style="color:#E65100; font-weight:bold;">Delivery Code: ${o.deliveryCode}</small>` : '';
                 
                 list.innerHTML += `
@@ -677,18 +562,22 @@ window.simulateTestPayment = async () => {
 
 
 // ==========================================
-// 📄 PDF RECEIPT GENERATOR (UPDATED FOR WALLET)
+// 📄 PROFESSIONAL PDF RECEIPT GENERATOR
 // ==========================================
 window.generateReceiptPDF = (orderData) => {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    const primaryColor = [255, 179, 0];
-    const darkColor = [26, 29, 31];
+    // -- COLORS --
+    const primaryColor = [255, 179, 0]; // Your Brand Yellow
+    const darkColor = [26, 29, 31];     // Dark Grey
 
+    // -- HEADER --
+    // Gold Bar at top
     doc.setFillColor(...primaryColor);
     doc.rect(0, 0, 210, 40, 'F');
 
+    // Title
     doc.setFontSize(22);
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
@@ -698,12 +587,14 @@ window.generateReceiptPDF = (orderData) => {
     doc.setFont("helvetica", "normal");
     doc.text("Official Payment Receipt", 105, 30, { align: "center" });
 
+    // -- ORDER INFO SECTION --
     doc.setTextColor(...darkColor);
     doc.setFontSize(10);
     
     const startY = 55;
     const dateStr = orderData.createdAt.toDate ? orderData.createdAt.toDate().toLocaleString() : new Date(orderData.createdAt).toLocaleString();
 
+    // Left Side: Customer Info
     doc.setFont("helvetica", "bold");
     doc.text("BILLED TO:", 14, startY);
     doc.setFont("helvetica", "normal");
@@ -711,6 +602,7 @@ window.generateReceiptPDF = (orderData) => {
     doc.text(orderData.address || "Mombasa, Kenya", 14, startY + 12);
     doc.text(`Tel: ${orderData.mpesaNumber || "N/A"}`, 14, startY + 18);
 
+    // Right Side: Order Details
     doc.setFont("helvetica", "bold");
     doc.text("RECEIPT DETAILS:", 140, startY);
     doc.setFont("helvetica", "normal");
@@ -718,6 +610,7 @@ window.generateReceiptPDF = (orderData) => {
     doc.text(`Date: ${dateStr}`, 140, startY + 12);
     doc.text(`Status: ${orderData.status}`, 140, startY + 18);
 
+    // -- TABLE OF ITEMS --
     doc.autoTable({
         startY: startY + 30,
         head: [['Description', 'Quantity', 'Unit Price', 'Total']],
@@ -734,45 +627,40 @@ window.generateReceiptPDF = (orderData) => {
         styles: { fontSize: 11, cellPadding: 5 },
     });
 
+    // -- TOTALS SECTION --
     const finalY = doc.lastAutoTable.finalY + 10;
     
     doc.setFontSize(12);
-    
-    // Total Line
-    doc.text(`Total Order Value:`, 130, finalY);
+    doc.text(`Subtotal:`, 140, finalY);
     doc.text(`Ksh ${orderData.totalPrice.toLocaleString()}`, 170, finalY);
-
-    // Wallet Line (Only if used)
-    let currentY = finalY;
-    if(orderData.paidViaWallet > 0) {
-        currentY += 8;
-        doc.setTextColor(46, 125, 50); // Green
-        doc.text(`Paid via Wallet:`, 130, currentY);
-        doc.text(`- Ksh ${orderData.paidViaWallet.toLocaleString()}`, 170, currentY);
-        doc.setTextColor(...darkColor);
-    }
-
-    // Mpesa Line
-    if(orderData.paidViaMpesa > 0) {
-        currentY += 8;
-        doc.text(`Paid via M-Pesa:`, 130, currentY);
-        doc.text(`Ksh ${orderData.paidViaMpesa.toLocaleString()}`, 170, currentY);
-    }
     
-    // M-Pesa Box
-    if (orderData.mpesaCode) {
-        doc.setDrawColor(200, 200, 200);
-        doc.roundedRect(14, finalY + 25, 180, 20, 3, 3, 'S');
-        doc.text(`Transaction Details`, 20, finalY + 33);
-        doc.setFont("helvetica", "bold");
-        doc.text(`Code: ${orderData.mpesaCode}`, 20, finalY + 40);
-    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(`TOTAL PAID:`, 140, finalY + 10);
+    doc.setTextColor(46, 125, 50); // Green Color
+    doc.text(`Ksh ${orderData.totalPrice.toLocaleString()}`, 170, finalY + 10);
 
+    // -- FOOTER --
+    doc.setTextColor(...darkColor);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    
+    // M-Pesa Code Box
+    doc.setDrawColor(200, 200, 200);
+    doc.roundedRect(14, finalY + 25, 180, 20, 3, 3, 'S');
+    doc.text(`Payment Method: M-Pesa`, 20, finalY + 33);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Transaction Code: ${orderData.mpesaCode || "N/A"}`, 20, finalY + 40);
+
+    // Bottom Note
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
     doc.text("Thank you for your business!", 105, 280, { align: "center" });
+    doc.text("For support call: 0700 000 000", 105, 285, { align: "center" });
 
+    // Save File
     doc.save(`Receipt_EggMaster_${orderData.deliveryCode || "Order"}.pdf`);
 };
 
+// Global Store to hold order data for downloading
 window.ordersDataMap = {};
