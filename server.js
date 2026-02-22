@@ -119,6 +119,3 @@ app.post('/webhook/sms', async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 EggMaster Server running on port ${PORT}`));
-
-// ADD THIS LINE FOR VERCEL
-module.exports = app; 
