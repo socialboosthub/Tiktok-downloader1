@@ -127,10 +127,36 @@ window.initiateOrder = () => {
     }
 
     const total = quantity * currentEggPrice;
-    document.getElementById('mpesaTotalDisplay').innerText = total.toLocaleString();
+    
+    // Populate the new UI dynamically
+    document.getElementById('modalTrayCount').innerText = quantity;
+    document.getElementById('modalTrayPrice').innerText = currentEggPrice.toLocaleString();
+    document.getElementById('modalTotalAmount').innerText = total.toLocaleString();
+    document.getElementById('modalPayAmount').innerText = total.toLocaleString();
+    
+    // Reset inputs and show View 1
     document.getElementById('mpesaCodeInput').value = "";
+    document.getElementById('payment-instructions-view').style.display = 'block';
+    document.getElementById('payment-validation-view').style.display = 'none';
+    
     document.getElementById('mpesa-modal').style.display = 'flex';
 };
+
+// --- NEW VIEW TOGGLE FUNCTIONS ---
+window.showValidationView = () => {
+    document.getElementById('payment-instructions-view').style.display = 'none';
+    document.getElementById('payment-validation-view').style.display = 'block';
+};
+
+window.showInstructionsView = () => {
+    document.getElementById('payment-validation-view').style.display = 'none';
+    document.getElementById('payment-instructions-view').style.display = 'block';
+};
+
+window.closeMpesaModal = () => {
+    document.getElementById('mpesa-modal').style.display = 'none';
+};
+
 
 // ==========================================
 // 🔥 REWRITTEN PAYMENT & ORDER SYSTEM (FIXED)
